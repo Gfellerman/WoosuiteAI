@@ -23,6 +23,18 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 - [x] **Assets:** Generated production build assets (`assets/woosuite-app.js`, `assets/woosuite-app.css`).
 - [x] **Fix Deployment:** Removed `assets/` from `.gitignore` to ensure built files are committed.
 - [x] **Data Integrity:** Removed fake/hardcoded numbers from Dashboard; all metrics (Threats, AI Searches, etc.) now fetch real data (or 0) from the API.
+- [x] **Cache Busting:** Implemented `filemtime` versioning for scripts and styles to prevent browser caching issues.
+- [x] **Build System:** Created `build_plugin.sh` for reliable one-click zip generation.
+
+## How to Build for Release
+To create a production-ready zip file that can be uploaded to WordPress:
+1.  Open your terminal in the project root.
+2.  Run the build script:
+    ```bash
+    sh build_plugin.sh
+    ```
+3.  Download the generated `woosuite-ai.zip` file.
+4.  Upload to WordPress via **Plugins > Add New > Upload Plugin**.
 
 ## Planned Tasks & Roadmap
 
