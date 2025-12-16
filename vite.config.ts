@@ -18,6 +18,24 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        outDir: 'assets', // Output to the 'assets' folder in the root
+        emptyOutDir: true, // Clean the folder before build
+        rollupOptions: {
+          input: {
+            app: path.resolve(__dirname, 'index.html'),
+          },
+          output: {
+            entryFileNames: 'woosuite-app.js',
+            assetFileNames: (assetInfo) => {
+              if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+                return 'woosuite-app.css';
+              }
+              return '[name][extname]';
+            },
+          },
+        },
+      },
     };
 });
