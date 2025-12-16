@@ -18,6 +18,30 @@ class WooSuite_Api {
             'callback' => array( $this, 'get_status' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
+
+        register_rest_route( $this->namespace, '/settings', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'save_settings' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/settings', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_settings' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/products', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_products' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/stats', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_stats' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
     }
 
     public function get_status( $request ) {
@@ -26,6 +50,78 @@ class WooSuite_Api {
             'version' => $this->version,
             'message' => 'WooSuite AI is running'
         ), 200 );
+    }
+
+    public function save_settings( $request ) {
+        $params = $request->get_json_params();
+        if ( isset( $params['apiKey'] ) ) {
+            update_option( 'woosuite_gemini_api_key', sanitize_text_field( $params['apiKey'] ) );
+        }
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function get_settings( $request ) {
+        $api_key = get_option( 'woosuite_gemini_api_key', '' );
+        return new WP_REST_Response( array( 'apiKey' => $api_key ), 200 );
+    }
+
+    public function get_products( $request ) {
+        if ( ! class_exists( 'WooCommerce' ) ) {
+            return new WP_REST_Response( array(), 200 );
+        }
+
+        $args = array(
+            'limit' => 20,
+            'status' => 'publish',
+        );
+        $products = wc_get_products( $args );
+        $data = array();
+
+        foreach ( $products as $product ) {
+            $data[] = array(
+                'id' => $product->get_id(),
+                'name' => $product->get_name(),
+                'description' => strip_tags( $product->get_short_description() ?: $product->get_description() ),
+                'price' => $product->get_price(),
+                'metaTitle' => get_post_meta( $product->get_id(), '_woosuite_meta_title', true ),
+                'metaDescription' => get_post_meta( $product->get_id(), '_woosuite_meta_description', true ),
+                'llmSummary' => get_post_meta( $product->get_id(), '_woosuite_llm_summary', true ),
+            );
+        }
+
+        return new WP_REST_Response( $data, 200 );
+    }
+
+    public function get_stats( $request ) {
+        $stats = array(
+            'orders' => 0,
+            'seo_score' => 0,
+            'threats' => 0,
+        );
+
+        if ( class_exists( 'WooCommerce' ) ) {
+             // Get order counts
+             $order_counts = wc_get_order_status_counts();
+             $stats['orders'] = array_sum($order_counts);
+        }
+
+        // SEO Score (Simple logic: % of posts with meta desc)
+        $posts = get_posts(array('numberposts' => -1, 'post_type' => array('post', 'page', 'product')));
+        $total = count($posts);
+        $optimized = 0;
+        if ($total > 0) {
+            foreach ($posts as $p) {
+                // Check if our meta or Yoast/RankMath meta exists
+                if (get_post_meta($p->ID, '_woosuite_meta_description', true) || get_post_meta($p->ID, '_yoast_wpseo_metadesc', true)) {
+                    $optimized++;
+                }
+            }
+            $stats['seo_score'] = round(($optimized / $total) * 100);
+        } else {
+             $stats['seo_score'] = 0;
+        }
+
+        return new WP_REST_Response( $stats, 200 );
     }
 
     public function check_permission() {
