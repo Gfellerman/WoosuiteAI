@@ -1,0 +1,5 @@
+{
+  "name": "WooSuite AI Admin",
+  "description": "A comprehensive React-based admin dashboard for a WooCommerce plugin suite featuring AI-powered SEO, Security, Search, Order Management, and Backups.",
+  "requestFramePermissions": []
+}
