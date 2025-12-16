@@ -96,7 +96,9 @@ class WooSuite_Api {
         $stats = array(
             'orders' => 0,
             'seo_score' => 0,
-            'threats' => 0,
+            'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
+            'ai_searches' => (int) get_option( 'woosuite_ai_searches_count', 0 ),
+            'last_backup' => get_option( 'woosuite_last_backup_time', 'Never' ),
         );
 
         if ( class_exists( 'WooCommerce' ) ) {
