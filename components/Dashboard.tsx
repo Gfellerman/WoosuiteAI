@@ -3,17 +3,31 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ShieldCheck, Search, ShoppingBag, HardDrive } from 'lucide-react';
 
 const trafficData = [
-  { name: 'Mon', visits: 4000, blocked: 240 },
-  { name: 'Tue', visits: 3000, blocked: 139 },
-  { name: 'Wed', visits: 2000, blocked: 980 },
-  { name: 'Thu', visits: 2780, blocked: 390 },
-  { name: 'Fri', visits: 1890, blocked: 480 },
-  { name: 'Sat', visits: 2390, blocked: 380 },
-  { name: 'Sun', visits: 3490, blocked: 430 },
+  { name: 'Mon', visits: 0, blocked: 0 },
+  { name: 'Tue', visits: 0, blocked: 0 },
+  { name: 'Wed', visits: 0, blocked: 0 },
+  { name: 'Thu', visits: 0, blocked: 0 },
+  { name: 'Fri', visits: 0, blocked: 0 },
+  { name: 'Sat', visits: 0, blocked: 0 },
+  { name: 'Sun', visits: 0, blocked: 0 },
 ];
 
+interface Stats {
+    orders: number;
+    seo_score: number;
+    threats_blocked: number;
+    ai_searches: number;
+    last_backup: string;
+}
+
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState({ orders: 0, seo_score: 0 });
+  const [stats, setStats] = useState<Stats>({
+      orders: 0,
+      seo_score: 0,
+      threats_blocked: 0,
+      ai_searches: 0,
+      last_backup: 'Never'
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,7 +67,9 @@ const Dashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500">Threats Blocked</p>
-            <h3 className="text-2xl font-bold text-gray-800">3,291</h3>
+            <h3 className="text-2xl font-bold text-gray-800">
+                {loading ? '...' : stats.threats_blocked.toLocaleString()}
+            </h3>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
@@ -62,7 +78,9 @@ const Dashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500">AI Searches</p>
-            <h3 className="text-2xl font-bold text-gray-800">14.5k</h3>
+            <h3 className="text-2xl font-bold text-gray-800">
+                {loading ? '...' : stats.ai_searches.toLocaleString()}
+            </h3>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
@@ -72,7 +90,7 @@ const Dashboard: React.FC = () => {
           <div>
             <p className="text-sm text-gray-500">Orders Processed</p>
             <h3 className="text-2xl font-bold text-gray-800">
-                {loading ? '...' : stats.orders}
+                {loading ? '...' : stats.orders.toLocaleString()}
             </h3>
           </div>
         </div>
@@ -82,7 +100,9 @@ const Dashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500">Last Backup</p>
-            <h3 className="text-xl font-bold text-gray-800">2h ago</h3>
+            <h3 className="text-xl font-bold text-gray-800">
+                {loading ? '...' : stats.last_backup}
+            </h3>
           </div>
         </div>
       </div>

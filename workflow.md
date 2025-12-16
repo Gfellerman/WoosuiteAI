@@ -21,6 +21,8 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 - [x] **Real Data:** Connected Dashboard to real Order counts and SEO scores.
 - [x] **Settings:** Implemented secure API Key storage in WordPress database.
 - [x] **Assets:** Generated production build assets (`assets/woosuite-app.js`, `assets/woosuite-app.css`).
+- [x] **Fix Deployment:** Removed `assets/` from `.gitignore` to ensure built files are committed.
+- [x] **Data Integrity:** Removed fake/hardcoded numbers from Dashboard; all metrics (Threats, AI Searches, etc.) now fetch real data (or 0) from the API.
 
 ## Planned Tasks & Roadmap
 
