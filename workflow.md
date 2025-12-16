@@ -38,9 +38,10 @@ To create a production-ready zip file that can be uploaded to WordPress:
 
 ## Planned Tasks & Roadmap
 
-### Phase 1: Stability & UI Fixes (Current Focus)
-- [x] **Mobile Responsiveness:** Implement functional sidebar toggle for mobile devices (Done).
-- [ ] **Style Isolation:** Ensure Tailwind CSS does not bleed into global WordPress Admin styles (Ongoing).
+### Phase 1.5: UI Polish (Next Priority)
+- [ ] **Enhance Layout:** Improve the visual design of the dashboard (addressing "ugly" feedback).
+- [ ] **Component Library:** Standardize buttons, cards, and inputs.
+- [ ] **Style Isolation:** Ensure Tailwind CSS does not bleed into global WordPress Admin styles.
 
 ### Phase 2: Feature Implementation
 1.  **Speed & Optimization Module**
