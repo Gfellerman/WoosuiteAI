@@ -9,20 +9,46 @@ const Settings: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) setApiKey(storedKey);
-    
-    if (process.env.API_KEY) {
-        setSystemKeyPresent(true);
+    // Check for global data first
+    if (window.woosuiteData?.apiKey) {
+      setApiKey(window.woosuiteData.apiKey);
+      setSystemKeyPresent(true);
+    } else {
+        // Fallback to localStorage
+        const storedKey = localStorage.getItem('gemini_api_key');
+        if (storedKey) setApiKey(storedKey);
+
+        if (process.env.API_KEY) {
+            setSystemKeyPresent(true);
+        }
     }
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (apiKey.trim()) {
         localStorage.setItem('gemini_api_key', apiKey.trim());
     } else {
         localStorage.removeItem('gemini_api_key');
     }
+
+    // Save to WordPress Backend
+    if (window.woosuiteData?.apiUrl) {
+        try {
+            await fetch(`${window.woosuiteData.apiUrl}/settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': window.woosuiteData.nonce
+                },
+                body: JSON.stringify({ apiKey: apiKey.trim() })
+            });
+            // Update the global key
+            window.woosuiteData.apiKey = apiKey.trim();
+        } catch (e) {
+            console.error('Failed to save settings to WordPress', e);
+        }
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };

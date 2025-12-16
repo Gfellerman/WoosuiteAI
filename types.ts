@@ -50,3 +50,14 @@ export interface EmailRule {
   body: string;
   active: boolean;
 }
+
+declare global {
+  interface Window {
+    woosuiteData: {
+      root: string;
+      nonce: string;
+      apiUrl: string;
+      apiKey: string;
+    };
+  }
+}

@@ -2,9 +2,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Product } from "../types";
 
 const getAiClient = () => {
-  // Check for user-provided key in localStorage first (simulating plugin settings)
-  const userKey = localStorage.getItem('gemini_api_key');
-  const apiKey = userKey || process.env.API_KEY;
+  // Prioritize the key from WordPress backend (woosuiteData)
+  const wpKey = window.woosuiteData?.apiKey;
+  // Fallback to localStorage or env for development
+  const localKey = localStorage.getItem('gemini_api_key');
+  const apiKey = wpKey || localKey || process.env.API_KEY;
   
   if (!apiKey) {
     throw new Error("API_KEY is not set. Please configure it in Settings.");

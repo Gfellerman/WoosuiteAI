@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ShieldCheck, Search, ShoppingBag, HardDrive } from 'lucide-react';
 
@@ -12,12 +12,38 @@ const trafficData = [
   { name: 'Sun', visits: 3490, blocked: 430 },
 ];
 
-const seoData = [
-  { name: 'Optimized', value: 85 },
-  { name: 'Missing', value: 15 },
-];
-
 const Dashboard: React.FC = () => {
+  const [stats, setStats] = useState({ orders: 0, seo_score: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!window.woosuiteData?.apiUrl) {
+          setLoading(false);
+          return;
+      }
+      try {
+        const res = await fetch(`${window.woosuiteData.apiUrl}/stats`, {
+            headers: { 'X-WP-Nonce': window.woosuiteData.nonce }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setStats(data);
+        }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const seoData = [
+    { name: 'Optimized', value: stats.seo_score },
+    { name: 'Missing', value: 100 - stats.seo_score },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -45,7 +71,9 @@ const Dashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-500">Orders Processed</p>
-            <h3 className="text-2xl font-bold text-gray-800">1,203</h3>
+            <h3 className="text-2xl font-bold text-gray-800">
+                {loading ? '...' : stats.orders}
+            </h3>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
@@ -99,7 +127,9 @@ const Dashboard: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
             <div className="mt-4 text-center">
-              <p className="text-3xl font-bold text-gray-800">92/100</p>
+              <p className="text-3xl font-bold text-gray-800">
+                  {loading ? '...' : `${stats.seo_score}/100`}
+              </p>
               <p className="text-sm text-gray-500">Overall Score</p>
             </div>
           </div>

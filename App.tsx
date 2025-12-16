@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ViewState, Product, Order } from './types';
 import Dashboard from './components/Dashboard';
 import SeoManager from './components/SeoManager';
@@ -29,6 +29,29 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchRealData = async () => {
+        if (!window.woosuiteData?.apiUrl) return;
+
+        try {
+            // Fetch Products
+            const prodRes = await fetch(`${window.woosuiteData.apiUrl}/products`, {
+                headers: { 'X-WP-Nonce': window.woosuiteData.nonce }
+            });
+            if (prodRes.ok) {
+                const fetchedProducts: Product[] = await prodRes.json();
+                if (fetchedProducts && fetchedProducts.length > 0) {
+                    setProducts(fetchedProducts);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch real data", e);
+        }
+    };
+
+    fetchRealData();
+  }, []);
 
   const handleUpdateProduct = (updated: Product) => {
     setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
