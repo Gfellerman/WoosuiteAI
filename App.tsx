@@ -8,7 +8,7 @@ import OrderManager from './components/OrderManager';
 import BackupManager from './components/BackupManager';
 import EmailAutomation from './components/EmailAutomation';
 import Settings from './components/Settings';
-import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X } from 'lucide-react';
 
 // Initial Mock Data
 const initialProducts: Product[] = [
@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleUpdateProduct = (updated: Product) => {
     setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -35,7 +36,10 @@ const App: React.FC = () => {
 
   const NavItem = ({ id, label, icon: Icon }: { id: ViewState, label: string, icon: React.ElementType }) => (
     <button
-      onClick={() => setView(id)}
+      onClick={() => {
+        setView(id);
+        setIsMobileMenuOpen(false);
+      }}
       className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
         view === id 
           ? 'bg-purple-600 text-white shadow-md' 
@@ -48,15 +52,38 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="flex h-screen bg-gray-100 text-gray-800 font-sans overflow-hidden">
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans relative">
+
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-gray-50 border-r border-gray-200 flex-shrink-0 hidden md:flex flex-col">
-        <div className="p-6">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out
+        md:relative md:translate-x-0
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="p-6 flex items-center justify-between">
            <div className="flex items-center gap-2 text-purple-700 font-bold text-xl">
               <Box className="fill-current" />
               <span>WooSuite AI</span>
            </div>
-           <div className="mt-2 flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100 w-fit">
+           {/* Mobile Close Button */}
+           <button
+             onClick={() => setIsMobileMenuOpen(false)}
+             className="md:hidden text-gray-500 hover:text-gray-700"
+           >
+             <X size={24} />
+           </button>
+        </div>
+
+        <div className="px-6 pb-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100 w-fit">
               <Beaker size={10} /> Demo Mode
            </div>
         </div>
@@ -88,15 +115,20 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col min-h-screen">
         {/* Mobile Header */}
-        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:hidden">
+        <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:hidden sticky top-0 z-30">
              <div className="font-bold text-gray-800">WooSuite AI</div>
-             <button className="p-2 text-gray-600"><LayoutDashboard /></button>
+             <button
+               onClick={() => setIsMobileMenuOpen(true)}
+               className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
+             >
+               <Menu />
+             </button>
         </header>
 
         {/* Header - Desktop */}
-        <header className="hidden md:flex bg-white border-b border-gray-200 h-16 items-center justify-between px-8">
+        <header className="hidden md:flex bg-white border-b border-gray-200 h-16 items-center justify-between px-8 sticky top-0 z-30">
             <h1 className="text-xl font-semibold text-gray-800 capitalize">{view.replace('-', ' ')}</h1>
             <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-500">Welcome, Admin</span>
@@ -107,7 +139,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'seo' && <SeoManager products={products} onUpdateProduct={handleUpdateProduct} />}

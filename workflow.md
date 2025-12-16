@@ -1,0 +1,53 @@
+# WooSuite AI - Development Workflow
+
+## Project Overview
+WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace multiple single-purpose plugins. It leverages Google Gemini AI to automate and enhance Security, SEO, Marketing, Backups, and Speed Optimization.
+
+## Current Status
+*   **Architecture:** Hybrid (React Dashboard + PHP REST API).
+*   **Core Structure:** Plugin files created, React app configured with Vite & Tailwind CSS.
+*   **Deployment:** Successfully built and deployed to a test WordPress environment.
+*   **UI/UX:** Initial dashboard implemented but requires layout fixes for WordPress Admin integration.
+
+## Completed Tasks
+- [x] Initial Repository Setup.
+- [x] Defined Hybrid Architecture.
+- [x] Created PHP Core (Activator, Deactivator, Admin Menu, API Handler).
+- [x] Set up React Environment (Vite, Tailwind, TypeScript).
+- [x] implemented initial Dashboard UI with mock data.
+- [x] Verified Build Process (`npm run build`).
+
+## Planned Tasks & Roadmap
+
+### Phase 1: Stability & UI Fixes (Current Focus)
+- [ ] **Fix Layout:** Adjust `App.tsx` to remove `h-screen` and `overflow-hidden` to fit properly within WordPress Admin.
+- [ ] **Mobile Responsiveness:** Implement functional sidebar toggle for mobile devices.
+- [ ] **Style Isolation:** Ensure Tailwind CSS does not bleed into global WordPress Admin styles.
+
+### Phase 2: Feature Implementation (Advice & Recommendations)
+These features are recommended to make WooSuite AI the "Best Plugin in the World":
+
+1.  **Speed & Optimization Module**
+    *   **Database Cleaner:** One-click removal of post revisions, transients, and spam comments.
+    *   **Image Optimizer:** Auto-compress images on upload (WebP conversion).
+    *   **Script Manager:** Dequeue unused JS/CSS on specific pages.
+
+2.  **AI Customer Support (Gemini Powered)**
+    *   **Chatbot Widget:** A frontend chat widget trained on the store's products and policies.
+    *   **Auto-Reply:** Draft AI responses for customer emails in the backend.
+
+3.  **Advanced Analytics & Reporting**
+    *   **Review Analysis:** AI sentiment analysis of product reviews to identify common complaints or praises.
+    *   **Sales Insights:** specific insights on "Why sales dropped yesterday" using AI analysis of traffic vs. conversion.
+
+4.  **Security Hardening**
+    *   **Login Protection:** 2FA and limit login attempts.
+    *   **File Monitor:** Scan for core file changes.
+
+5.  **Marketing Automation**
+    *   **Abandoned Cart Recovery:** AI-generated emails to recover lost sales.
+    *   **Social Media Scheduler:** Auto-post new products to social media with AI captions.
+
+## Notes
+- Ensure all React components use the `woosuiteData` global object for API nonces and URLs.
+- Maintain compatibility with the latest WordPress version.
