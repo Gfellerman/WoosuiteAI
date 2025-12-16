@@ -11,18 +11,8 @@ import Settings from './components/Settings';
 import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X } from 'lucide-react';
 
 // Initial Mock Data
-const initialProducts: Product[] = [
-  { id: 1, name: "Vintage Leather Jacket", description: "A classic distressed leather jacket with brass zippers.", price: 199.99 },
-  { id: 2, name: "Wireless Noise-Canceling Headphones", description: "Premium over-ear headphones with 40h battery life.", price: 299.99 },
-  { id: 3, name: "Organic Matcha Green Tea", description: "Ceremonial grade matcha powder from Japan.", price: 24.50 },
-  { id: 4, name: "4K Action Camera Gimbal", description: "3-axis handheld gimbal stabilizer for smooth video.", price: 89.00 },
-];
-
-const initialOrders: Order[] = [
-  { id: 10234, customer: "Alice Johnson", status: "pending", total: 199.99, date: "2023-10-27", customerNote: "Can you expedite shipping?" },
-  { id: 10235, customer: "Bob Smith", status: "completed", total: 45.00, date: "2023-10-26" },
-  { id: 10236, customer: "Charlie Davis", status: "processing", total: 320.50, date: "2023-10-26", customerNote: "I ordered the wrong color, can I change to Black?" },
-];
+const initialProducts: Product[] = [];
+const initialOrders: Order[] = [];
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
@@ -105,11 +95,6 @@ const App: React.FC = () => {
            </button>
         </div>
 
-        <div className="px-6 pb-2">
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-100 w-fit">
-              <Beaker size={10} /> Demo Mode
-           </div>
-        </div>
 
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
           <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
@@ -145,6 +130,7 @@ const App: React.FC = () => {
              <button
                onClick={() => setIsMobileMenuOpen(true)}
                className="p-2 text-gray-600 hover:bg-gray-100 rounded-md"
+               aria-label="Toggle menu"
              >
                <Menu />
              </button>

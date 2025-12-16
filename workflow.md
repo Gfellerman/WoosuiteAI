@@ -25,6 +25,16 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 - [x] **Data Integrity:** Removed fake/hardcoded numbers from Dashboard; all metrics (Threats, AI Searches, etc.) now fetch real data (or 0) from the API.
 - [x] **Cache Busting:** Implemented `filemtime` versioning for scripts and styles to prevent browser caching issues.
 - [x] **Build System:** Created `build_plugin.sh` for reliable one-click zip generation.
+- [x] **Environment Setup:** Created `setup_env.sh` for easy environment initialization.
+- [x] **Mock Data Removal:** Cleared `initialProducts` and `initialOrders` in `App.tsx` to prevent confusing "fake data" on fresh installs.
+
+## Development Environment Setup
+If you are starting a new session or configuring an agent environment:
+1. Run the setup script:
+   ```bash
+   bash setup_env.sh
+   ```
+   This will install dependencies and build the initial assets.
 
 ## How to Build for Release
 To create a production-ready zip file that can be uploaded to WordPress:
