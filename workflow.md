@@ -27,6 +27,8 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 - [x] **Build System:** Created `build_plugin.sh` for reliable one-click zip generation.
 - [x] **Environment Setup:** Created `setup_env.sh` for easy environment initialization.
 - [x] **Mock Data Removal:** Cleared `initialProducts` and `initialOrders` in `App.tsx` to prevent confusing "fake data" on fresh installs.
+- [x] **Fix Styles:** Updated `index.css` to use correct Tailwind v4 `@import` syntax, resolving broken layout issues.
+- [x] **Architecture:** Renamed React root ID to `woosuite-app-root` to avoid conflicts with other plugins.
 
 ## Development Environment Setup
 If you are starting a new session or configuring an agent environment:

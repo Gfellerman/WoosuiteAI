@@ -24,7 +24,7 @@ class WooSuite_Admin {
 
 	public function display_plugin_admin_page() {
 		// This div is where the React App will mount
-		echo '<div id="root"></div>';
+		echo '<div id="woosuite-app-root"></div>';
 	}
 
 	public function enqueue_styles( $hook ) {
