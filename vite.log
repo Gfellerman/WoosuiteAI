@@ -26,3 +26,11 @@
 9:27:29 AM [vite] (client) hmr update /App.tsx, /index.css?direct, /index.css
 9:28:13 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
 9:28:52 AM [vite] (client) page reload workflow.md
+10:26:23 AM [vite] (client) page reload woosuite-ai.php
+10:29:42 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+10:29:55 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+10:30:57 AM [vite] (client) page reload workflow.md
+10:36:22 AM [vite] (client) page reload includes/class-woosuite-security.php
+10:36:30 AM [vite] (client) page reload includes/class-woosuite-admin.php
+10:36:39 AM [vite] (client) page reload types.ts
+10:36:48 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css

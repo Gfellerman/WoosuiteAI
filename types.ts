@@ -65,6 +65,7 @@ declare global {
   interface Window {
     woosuiteData: {
       root: string;
+      homeUrl?: string;
       nonce: string;
       apiUrl: string;
       apiKey: string;

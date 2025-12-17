@@ -14,8 +14,8 @@ class WooSuite_Security {
     }
 
     public function init() {
-        // Run Firewall early
-        add_action( 'plugins_loaded', array( $this, 'firewall_check' ), 1 );
+        // Run Firewall early (init ensures pluggable functions like is_user_logged_in are loaded)
+        add_action( 'init', array( $this, 'firewall_check' ), 1 );
 
         // Scheduled Scans
         add_action( 'woosuite_scheduled_scan', array( $this, 'perform_core_scan' ) );

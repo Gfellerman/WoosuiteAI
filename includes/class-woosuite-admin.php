@@ -51,6 +51,7 @@ class WooSuite_Admin {
         // Pass nonce and API url to React
         wp_localize_script( $this->plugin_name, 'woosuiteData', array(
             'root' => esc_url_raw( rest_url() ),
+            'homeUrl' => home_url(),
             'nonce' => wp_create_nonce( 'wp_rest' ),
             'apiUrl' => rest_url( 'woosuite/v1' ),
             'apiKey' => get_option( 'woosuite_gemini_api_key', '' )
