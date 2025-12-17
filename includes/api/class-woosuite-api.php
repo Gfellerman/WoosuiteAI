@@ -118,7 +118,8 @@ class WooSuite_Api {
                     'metaTitle' => get_post_meta( $product->get_id(), '_woosuite_meta_title', true ),
                     'metaDescription' => get_post_meta( $product->get_id(), '_woosuite_meta_description', true ),
                     'llmSummary' => get_post_meta( $product->get_id(), '_woosuite_llm_summary', true ),
-                    'type' => 'product'
+                    'type' => 'product',
+                    'permalink' => get_permalink( $product->get_id() )
                 );
             }
             return new WP_REST_Response( $data, 200 );
@@ -148,12 +149,14 @@ class WooSuite_Api {
                 'metaTitle' => get_post_meta( $post->ID, '_woosuite_meta_title', true ),
                 'metaDescription' => get_post_meta( $post->ID, '_woosuite_meta_description', true ),
                 'llmSummary' => get_post_meta( $post->ID, '_woosuite_llm_summary', true ),
-                'type' => $type
+                'type' => $type,
+                'permalink' => get_permalink( $post->ID )
             );
 
             // Add Image specific data
             if ( $type === 'image' ) {
                 $item['imageUrl'] = wp_get_attachment_url( $post->ID );
+                $item['permalink'] = $item['imageUrl']; // Use direct link for images
                 $item['altText'] = get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
                 // Use caption for description if excerpt is empty
                 if ( empty( $item['description'] ) ) {

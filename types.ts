@@ -7,6 +7,7 @@ export interface ContentItem {
   name: string;
   description: string;
   type: ContentType;
+  permalink?: string;
   metaTitle?: string;
   metaDescription?: string;
   llmSummary?: string;

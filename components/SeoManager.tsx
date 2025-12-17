@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
 import { generateSeoMeta, generateImageSeo } from '../services/geminiService';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -259,22 +259,47 @@ const SeoManager: React.FC = () => {
                    )}
                 </td>
                 <td className="p-4 align-top text-right w-1/6">
-                  <button
-                    onClick={() => handleGenerate(item)}
-                    disabled={generating === item.id || isBulkOptimizing}
-                    className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium transition
-                        ${generating === item.id
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        }`}
-                  >
-                    {generating === item.id ? (
-                      <RefreshCw size={14} className="animate-spin mr-1.5" />
-                    ) : (
-                      <Sparkles size={14} className="mr-1.5" />
+                  <div className="flex flex-col gap-2 items-end">
+                    <button
+                        onClick={() => handleGenerate(item)}
+                        disabled={generating === item.id || isBulkOptimizing}
+                        className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium transition w-full
+                            ${generating === item.id
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                            }`}
+                    >
+                        {generating === item.id ? (
+                        <RefreshCw size={14} className="animate-spin mr-1.5" />
+                        ) : (
+                        <Sparkles size={14} className="mr-1.5" />
+                        )}
+                        Generate
+                    </button>
+
+                    {item.permalink && activeTab !== 'image' && (
+                    <a
+                        href={`https://metatags.io/?url=${encodeURIComponent(item.permalink)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 transition w-full border border-gray-200"
+                        title="Verify Meta Tags (Requires Public URL)"
+                    >
+                        <ExternalLink size={14} className="mr-1.5" /> Verify
+                    </a>
                     )}
-                    Generate
-                  </button>
+
+                    {activeTab === 'image' && item.permalink && (
+                    <a
+                        href={item.permalink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 transition w-full border border-gray-200"
+                    >
+                        <ExternalLink size={14} className="mr-1.5" /> View
+                    </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -10,7 +10,7 @@ const SecurityHub: React.FC = () => {
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [lastScan, setLastScan] = useState<string>('Never');
 
-  const { apiUrl, nonce } = window.woosuiteData || {};
+  const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -97,14 +97,24 @@ const SecurityHub: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-800">Security & Firewall</h2>
             <p className="text-gray-500">Real-time threat monitoring, malware scanning, and spam protection.</p>
         </div>
-        <button 
-            onClick={handleScan}
-            disabled={scanning}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm disabled:opacity-75"
-        >
-            {scanning ? <Activity className="animate-spin" size={18} /> : <FileSearch size={18} />}
-            {scanning ? 'Scanning Files...' : 'Run Malware Scan'}
-        </button>
+        <div className="flex gap-2">
+            <a
+                href={`${homeUrl}/?test_waf_block=<script>alert(1)</script>`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition flex items-center gap-2 shadow-sm"
+            >
+                <ShieldAlert size={18} /> Test Firewall
+            </a>
+            <button
+                onClick={handleScan}
+                disabled={scanning}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm disabled:opacity-75"
+            >
+                {scanning ? <Activity className="animate-spin" size={18} /> : <FileSearch size={18} />}
+                {scanning ? 'Scanning Files...' : 'Run Malware Scan'}
+            </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
