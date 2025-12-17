@@ -15,5 +15,10 @@ Port 3001 is in use, trying another one...
 10:36:39 AM [vite] (client) page reload types.ts
 10:36:48 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
 10:37:51 AM [vite] (client) page reload verification/verify_seo.py
-pes.ts
-10:36:48 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+11:18:54 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+11:19:02 AM [vite] (client) page reload types.ts
+11:19:12 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+11:20:13 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+11:20:26 AM [vite] (client) page reload workflow.md
+nents/SeoManager.tsx, /index.css?direct, /index.css
+11:20:26 AM [vite] (client) page reload workflow.md

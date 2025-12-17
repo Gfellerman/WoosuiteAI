@@ -7,24 +7,28 @@ WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one Word
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
 *   **Branding:** Updated Author to "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
 *   **Security Module:** Fully implemented (WAF, Scanner, Login Protection, Logs).
+    *   **Verification:** Added "Test Firewall" button to verify WAF efficacy against XSS/SQLi.
 *   **SEO Module:** Fully Functional & Verified.
     *   **Scope:** Supports Products, Posts, Pages, and Images.
     *   **Features:** Bulk Optimization, Image Analysis, Custom Sitemap.
+    *   **Verification:** Added "Verify Meta Tags" (via metatags.io) and "View Image" buttons to UI.
     *   **Fixes:** Resolved data persistence issues with robust error handling and logging.
-    *   **UI:** Updated terminology to highlight "Traditional & AI Search" optimization.
 *   **Dashboard:** Fully functional Security and SEO tabs.
 
 ## Recent Changes
+- [x] **Verification Tools:** Added user-facing tools to verify Security (Test WAF) and SEO (Inspect Live).
 - [x] **Branding:** Updated `woosuite-ai.php` author details.
 - [x] **SEO Persistence:** Enhanced `SeoManager.tsx` to trap and report save errors; added debug logging to `class-woosuite-api.php`.
-- [x] **UI Polish:** Updated SEO Manager header to explain value proposition (Search Engines + LLMs).
-- [x] **Testing:** Added `tests/` with mock verification scripts for API logic.
+- [x] **Bug Fixes:**
+    - Moved WAF hook to `init` to prevent fatal errors.
+    - Fixed Sitemap URL display.
+    - Corrected Image permalink logic.
 - [x] **Build:** Re-compiled frontend assets.
 
 ## Todo List (Next Priorities)
-1.  **Security UI Connection:** Ensure the Security page in React fully syncs with the Backend WAF status.
-2.  **Order Manager:** Implement real logic for Order Management features.
-3.  **Speed Module:** Begin implementation (Image Compression, Database Cleaner).
+1.  **Order Manager:** Implement real logic for Order Management features.
+2.  **Speed Module:** Begin implementation (Image Compression, Database Cleaner).
+3.  **Marketing:** Implement Email automation rules.
 
 ## Development Environment Setup
 If you are starting a new session or configuring an agent environment:
