@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Product } from "../types";
+import { ContentItem } from "../types";
 
 const getAiClient = () => {
   // Prioritize the key from WordPress backend (woosuiteData)
@@ -14,17 +14,16 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const generateSeoMeta = async (product: Product): Promise<{ title: string; description: string; llmSummary: string }> => {
+export const generateSeoMeta = async (item: ContentItem): Promise<{ title: string; description: string; llmSummary: string }> => {
   const ai = getAiClient();
   
-  // Prompt updated for "LLM Optimization" (GEO - Generative Engine Optimization)
-  // Focusing on factual density and clear structure for AI parsers.
+  let context = `Type: ${item.type}\nName: ${item.name}\nDescription: ${item.description}`;
+  if (item.price) context += `\nPrice: ${item.price}`;
+
   const prompt = `
-    Generate SEO and LLM-optimized metadata for this product.
+    Generate SEO and LLM-optimized metadata for this content.
     
-    Product: ${product.name}
-    Description: ${product.description}
-    Price: ${product.price}
+    ${context}
     
     1. Title: Max 60 chars, keyword rich.
     2. Description: Max 160 chars, enticing click-through.
@@ -58,11 +57,68 @@ export const generateSeoMeta = async (product: Product): Promise<{ title: string
   } catch (error) {
     console.error("SEO Generation Error:", error);
     return {
-      title: `${product.name} - Official Store`,
-      description: `Buy ${product.name}. High quality.`,
-      llmSummary: `${product.name} is available for $${product.price}. Key features: ${product.description}.`
+      title: `${item.name}`,
+      description: `Learn more about ${item.name}.`,
+      llmSummary: `${item.name}. ${item.description.substring(0, 100)}...`
     };
   }
+};
+
+export const generateImageSeo = async (imageUrl: string, fileName: string): Promise<{ altText: string; title: string }> => {
+    const ai = getAiClient();
+
+    try {
+        // Fetch image and convert to Base64
+        const imgRes = await fetch(imageUrl);
+        const blob = await imgRes.blob();
+        const base64Data = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+        });
+        const base64String = base64Data.split(',')[1];
+        const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+
+        const prompt = `
+            Analyze this image and generate SEO metadata.
+            Filename context: ${fileName}
+
+            1. Alt Text: Descriptive, accessible, under 125 chars.
+            2. Title: Short, catchy title for the image file.
+
+            Return JSON.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [
+                { text: prompt },
+                { inlineData: { mimeType: mimeType, data: base64String } }
+            ],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        altText: { type: Type.STRING },
+                        title: { type: Type.STRING }
+                    },
+                    required: ["altText", "title"]
+                }
+            }
+        });
+
+        const text = response.text;
+        if (!text) throw new Error("No response from AI");
+        return JSON.parse(text);
+
+    } catch (error) {
+        console.error("Image SEO Generation Error:", error);
+        return {
+            altText: fileName,
+            title: fileName
+        };
+    }
 };
 
 export const generateEmailResponse = async (customerName: string, orderId: number, issue: string): Promise<string> => {
@@ -111,24 +167,24 @@ export const generateMarketingContent = async (topic: string, audience: string, 
     }
 }
 
-export const performAiSearch = async (query: string, products: Product[]): Promise<number[]> => {
+export const performAiSearch = async (query: string, items: ContentItem[]): Promise<number[]> => {
   const ai = getAiClient();
   
-  const productsJson = JSON.stringify(products.map(p => ({ 
+  const itemsJson = JSON.stringify(items.map(p => ({
       id: p.id, 
       name: p.name, 
       desc: p.description,
-      summary: p.llmSummary // Include the LLM summary for better matching
+      summary: p.llmSummary
   })));
   
   const prompt = `
     You are an intelligent search engine for an online store.
     User Query: "${query}"
     
-    Available Products:
-    ${productsJson}
+    Available Content:
+    ${itemsJson}
     
-    Return a JSON object with a single key "matchedIds" which is an array of product IDs that are relevant to the query. 
+    Return a JSON object with a single key "matchedIds" which is an array of IDs that are relevant to the query.
     Rank them by relevance. If no matches, return empty array.
   `;
 

@@ -26,7 +26,7 @@ const App: React.FC = () => {
 
         try {
             // Fetch Products
-            const prodRes = await fetch(`${window.woosuiteData.apiUrl}/products`, {
+            const prodRes = await fetch(`${window.woosuiteData.apiUrl}/content?type=product`, {
                 headers: { 'X-WP-Nonce': window.woosuiteData.nonce }
             });
             if (prodRes.ok) {
@@ -142,7 +142,7 @@ const App: React.FC = () => {
         <div className="flex-1 p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
                 {view === 'dashboard' && <Dashboard />}
-                {view === 'seo' && <SeoManager products={products} onUpdateProduct={handleUpdateProduct} />}
+                {view === 'seo' && <SeoManager />}
                 {view === 'security' && <SecurityHub />}
                 {view === 'search' && <AiSearch products={products} />}
                 {view === 'orders' && <OrderManager orders={orders} />}

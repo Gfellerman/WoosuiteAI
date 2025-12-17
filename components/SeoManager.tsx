@@ -1,144 +1,324 @@
-import React, { useState } from 'react';
-import { Product } from '../types';
-import { generateSeoMeta } from '../services/geminiService';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ContentItem, ContentType } from '../types';
+import { generateSeoMeta, generateImageSeo } from '../services/geminiService';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings } from 'lucide-react';
 
-interface SeoManagerProps {
-  products: Product[];
-  onUpdateProduct: (product: Product) => void;
-}
-
-const SeoManager: React.FC<SeoManagerProps> = ({ products, onUpdateProduct }) => {
+const SeoManager: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<ContentType>('product');
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<number | null>(null);
-  const { apiUrl, nonce } = window.woosuiteData || {};
 
-  const handleGenerate = async (product: Product) => {
-    setGenerating(product.id);
+  // Bulk Optimization
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulkOptimizing, setIsBulkOptimizing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+
+  // Sitemap
+  const [showSitemapModal, setShowSitemapModal] = useState(false);
+  // Default to true as per plan, but in real app fetch from settings
+  const [sitemapEnabled, setSitemapEnabled] = useState(true);
+
+  const { apiUrl, nonce, root } = window.woosuiteData || {};
+
+  useEffect(() => {
+    fetchItems();
+  }, [activeTab]);
+
+  const fetchItems = async () => {
+    if (!apiUrl) return;
+    setLoading(true);
     try {
-      const result = await generateSeoMeta(product);
+        const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=100`, {
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setItems(data);
+            setSelectedIds([]); // Clear selection on tab switch
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setLoading(false);
+    }
+  };
 
-      // Save to Backend
-      if (apiUrl && nonce) {
-          try {
-              const saveRes = await fetch(`${apiUrl}/products/${product.id}`, {
-                  method: 'POST',
-                  headers: {
-                      'Content-Type': 'application/json',
-                      'X-WP-Nonce': nonce
-                  },
-                  body: JSON.stringify({
-                      metaTitle: result.title,
-                      metaDescription: result.description,
-                      llmSummary: result.llmSummary
-                  })
-              });
-
-              if (!saveRes.ok) {
-                  console.warn("Failed to persist SEO data to backend.");
-              }
-          } catch (err) {
-              console.error("API Error:", err);
-          }
+  const handleGenerate = async (item: ContentItem) => {
+    setGenerating(item.id);
+    try {
+      let result;
+      // Image Handling
+      if (item.type === 'image' && item.imageUrl) {
+          result = await generateImageSeo(item.imageUrl, item.name);
+      } else {
+          // Content Handling
+          result = await generateSeoMeta(item);
       }
 
-      // Update UI
-      onUpdateProduct({
-        ...product,
-        metaTitle: result.title,
-        metaDescription: result.description,
-        llmSummary: result.llmSummary
-      });
+      // Save to Backend
+      await saveItem(item, result);
+
+      // Update Local State
+      const updates = mapResultToItem(result, item.type);
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...updates } : p));
     } catch (e) {
       console.error(e);
-      alert("Failed to generate SEO data. Check API Key in Settings.");
     } finally {
       setGenerating(null);
     }
   };
 
+  const saveItem = async (item: ContentItem, data: any) => {
+      // Map data to API params
+      const payload: any = {};
+
+      if (item.type === 'image') {
+          if (data.altText) payload.altText = data.altText;
+          if (data.title) payload.title = data.title;
+      } else {
+          if (data.title) payload.metaTitle = data.title;
+          if (data.description) payload.metaDescription = data.description;
+          if (data.llmSummary) payload.llmSummary = data.llmSummary;
+      }
+
+      await fetch(`${apiUrl}/content/${item.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+          body: JSON.stringify(payload)
+      });
+  };
+
+  const mapResultToItem = (result: any, type: ContentType) => {
+      if (type === 'image') {
+          return { altText: result.altText, name: result.title }; // Note: name maps to post_title
+      }
+      return { metaTitle: result.title, metaDescription: result.description, llmSummary: result.llmSummary };
+  };
+
+  // Bulk Logic
+  const handleBulkOptimize = async () => {
+      if (selectedIds.length === 0) return;
+      setIsBulkOptimizing(true);
+      setBulkProgress({ current: 0, total: selectedIds.length });
+
+      for (let i = 0; i < selectedIds.length; i++) {
+          const id = selectedIds[i];
+          const item = items.find(p => p.id === id);
+          if (item) {
+              await handleGenerate(item);
+          }
+          setBulkProgress(prev => ({ ...prev, current: i + 1 }));
+      }
+
+      setIsBulkOptimizing(false);
+      setSelectedIds([]); // Clear selection
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedIds.length === items.length) setSelectedIds([]);
+      else setSelectedIds(items.map(i => i.id));
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header & Controls */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h2 className="text-2xl font-bold text-gray-800">AI SEO Manager</h2>
-            <p className="text-gray-500">Optimize meta tags and generate LLM-ready data (GEO).</p>
+            <p className="text-gray-500">Optimize content and images for Search Engines & LLMs.</p>
         </div>
         <div className="flex gap-2">
-            <button className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-                Sitemap Settings
+            <button
+                onClick={() => setShowSitemapModal(true)}
+                className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
+                <Settings size={16} /> Sitemap Settings
             </button>
-             <button className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition shadow-sm">
-                Bulk Optimize
-            </button>
+            {isBulkOptimizing ? (
+                 <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                     <RefreshCw size={16} className="animate-spin" />
+                     Processing {bulkProgress.current}/{bulkProgress.total}
+                 </div>
+            ) : (
+                <button
+                    onClick={handleBulkOptimize}
+                    disabled={selectedIds.length === 0}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2
+                        ${selectedIds.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                >
+                    <Sparkles size={16} /> Bulk Optimize ({selectedIds.length})
+                </button>
+            )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200 pb-1">
+          {[
+              { id: 'product', label: 'Products', icon: Box },
+              { id: 'post', label: 'Posts', icon: FileText },
+              { id: 'page', label: 'Pages', icon: Layout },
+              { id: 'image', label: 'Images', icon: ImageIcon }
+          ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as ContentType)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition
+                    ${activeTab === tab.id
+                        ? 'bg-white border-b-2 border-purple-600 text-purple-600'
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+              >
+                  <tab.icon size={16} /> {tab.label}
+              </button>
+          ))}
+      </div>
+
+      {/* Content Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+            <div className="p-8 text-center text-gray-500">Loading content...</div>
+        ) : (
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="p-4 font-semibold text-gray-600 text-sm">Product</th>
-              <th className="p-4 font-semibold text-gray-600 text-sm">Status</th>
-              <th className="p-4 font-semibold text-gray-600 text-sm">LLM Optimization (GEO)</th>
+              <th className="p-4 w-8">
+                  <input type="checkbox"
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+              </th>
+              <th className="p-4 font-semibold text-gray-600 text-sm">Item</th>
+              <th className="p-4 font-semibold text-gray-600 text-sm">SEO Status</th>
+              <th className="p-4 font-semibold text-gray-600 text-sm">
+                  {activeTab === 'image' ? 'AI Alt Text' : 'LLM Optimization (GEO)'}
+              </th>
               <th className="p-4 font-semibold text-gray-600 text-sm text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {products.map((product) => (
-              <tr key={product.id} className="hover:bg-gray-50 transition">
+            {items.map((item) => (
+              <tr key={item.id} className="hover:bg-gray-50 transition">
+                <td className="p-4 align-top">
+                    <input type="checkbox"
+                        checked={selectedIds.includes(item.id)}
+                        onChange={() => {
+                            if (selectedIds.includes(item.id)) setSelectedIds(selectedIds.filter(id => id !== item.id));
+                            else setSelectedIds([...selectedIds, item.id]);
+                        }}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    />
+                </td>
                 <td className="p-4 align-top w-1/4">
-                  <div className="font-medium text-gray-800">{product.name}</div>
-                  <div className="text-xs text-gray-500 mt-1 line-clamp-1">{product.description}</div>
+                  <div className="flex gap-3">
+                      {activeTab === 'image' && item.imageUrl && (
+                          <img src={item.imageUrl} alt={item.altText} className="w-12 h-12 rounded object-cover border border-gray-200" />
+                      )}
+                      <div>
+                          <div className="font-medium text-gray-800">{item.name}</div>
+                          <div className="text-xs text-gray-500 mt-1 line-clamp-1">{item.description || 'No description'}</div>
+                      </div>
+                  </div>
                 </td>
                 <td className="p-4 align-top w-1/6">
-                  {product.metaTitle ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <Check size={12} className="mr-1" /> Optimized
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                      <AlertCircle size={12} className="mr-1" /> Missing
-                    </span>
-                  )}
+                  {/* Status Check Logic */}
+                  {(() => {
+                      const isOptimized = activeTab === 'image'
+                        ? (item.altText && item.altText.length > 5)
+                        : (item.metaDescription && item.metaDescription.length > 10);
+
+                      return isOptimized ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          <Check size={12} className="mr-1" /> Optimized
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          <AlertCircle size={12} className="mr-1" /> Missing
+                        </span>
+                      );
+                  })()}
                 </td>
                 <td className="p-4 align-top">
-                   {product.llmSummary ? (
-                       <div className="space-y-2">
-                           <div className="text-xs font-semibold text-gray-500 flex items-center gap-1">
-                               <Bot size={12} /> AI/LLM Summary:
-                           </div>
-                           <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
-                               {product.llmSummary}
-                           </div>
-                           <div className="text-xs text-blue-600 truncate">{product.metaTitle}</div>
+                   {activeTab === 'image' ? (
+                       <div className="text-sm text-gray-700 italic">
+                           {item.altText || <span className="text-gray-400">No Alt Text</span>}
                        </div>
                    ) : (
-                       <div className="text-sm text-gray-400 italic">No AI-optimized data yet...</div>
+                       item.llmSummary ? (
+                           <div className="space-y-1">
+                               <div className="text-xs font-semibold text-gray-500 flex items-center gap-1">
+                                   <Bot size={12} /> AI/LLM Summary:
+                               </div>
+                               <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
+                                   {item.llmSummary}
+                               </div>
+                           </div>
+                       ) : (
+                           <div className="text-sm text-gray-400 italic">No AI-optimized data yet...</div>
+                       )
                    )}
                 </td>
                 <td className="p-4 align-top text-right w-1/6">
                   <button
-                    onClick={() => handleGenerate(product)}
-                    disabled={generating === product.id}
+                    onClick={() => handleGenerate(item)}
+                    disabled={generating === item.id || isBulkOptimizing}
                     className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium transition
-                        ${generating === product.id 
+                        ${generating === item.id
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                             : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                         }`}
                   >
-                    {generating === product.id ? (
+                    {generating === item.id ? (
                       <RefreshCw size={14} className="animate-spin mr-1.5" />
                     ) : (
                       <Sparkles size={14} className="mr-1.5" />
                     )}
-                    {generating === product.id ? 'Thinking...' : 'Generate'}
+                    Generate
                   </button>
                 </td>
               </tr>
             ))}
+            {items.length === 0 && (
+                <tr>
+                    <td colSpan={5} className="p-8 text-center text-gray-400">
+                        No content found for this type.
+                    </td>
+                </tr>
+            )}
           </tbody>
         </table>
+        )}
       </div>
+
+      {/* Sitemap Modal */}
+      {showSitemapModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                  <h3 className="text-xl font-bold mb-4">Sitemap Settings</h3>
+                  <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-700">Enable Custom Sitemap</span>
+                          {/* Toggle Display - Since we defaulted to Enabled in backend, just showing Enabled */}
+                          <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">Active</div>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-sm text-gray-600 font-mono">
+                          {root ? `${root}/sitemap.xml` : '/sitemap.xml'}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                          This sitemap includes all Products, Posts, Pages, and Images. It is automatically added to your robots.txt.
+                      </p>
+                  </div>
+                  <div className="mt-6 flex justify-end">
+                      <button
+                        onClick={() => setShowSitemapModal(false)}
+                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200">
+                        Close
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

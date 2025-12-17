@@ -30,7 +30,15 @@ class WooSuite_Core {
 
         // Load the Security class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-security.php';
+
+        // Load the Sitemap class
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-sitemap.php';
 	}
+
+    private function define_sitemap_hooks() {
+        $plugin_sitemap = new WooSuite_Sitemap( $this->plugin_name, $this->version );
+        $plugin_sitemap->init();
+    }
 
     private function define_security_hooks() {
         $plugin_security = new WooSuite_Security( $this->plugin_name, $this->version );
@@ -51,5 +59,6 @@ class WooSuite_Core {
 
 	public function run() {
         $this->define_security_hooks();
+        $this->define_sitemap_hooks();
 	}
 }
