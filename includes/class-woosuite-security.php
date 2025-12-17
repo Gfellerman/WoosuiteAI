@@ -16,6 +16,13 @@ class WooSuite_Security {
     public function init() {
         // Run Firewall early
         add_action( 'plugins_loaded', array( $this, 'firewall_check' ), 1 );
+
+        // Scheduled Scans
+        add_action( 'woosuite_scheduled_scan', array( $this, 'perform_core_scan' ) );
+
+        // Login Protection
+        add_action( 'wp_login_failed', array( $this, 'log_failed_login' ) );
+        add_filter( 'authenticate', array( $this, 'check_login_attempt' ), 1, 3 );
     }
 
     /**
@@ -127,6 +134,48 @@ class WooSuite_Security {
                 'created_at' => current_time( 'mysql' )
             )
         );
+    }
+
+    /**
+     * Handle Failed Login Attempts
+     */
+    public function log_failed_login( $username ) {
+        $ip = $this->get_client_ip();
+        $transient_name = 'woosuite_login_attempts_' . md5( $ip );
+        $attempts = get_transient( $transient_name );
+
+        if ( false === $attempts ) {
+            // First failure, start counter. 15 minute window.
+            set_transient( $transient_name, 1, 15 * 60 );
+        } else {
+            $attempts++;
+            set_transient( $transient_name, $attempts, 15 * 60 );
+        }
+
+        // Log the failure
+        $this->log_threat( $ip, 'Failed Login Attempt (' . $username . ')', 'low', false );
+    }
+
+    /**
+     * Pre-check Login Attempts (Brute Force Protection)
+     */
+    public function check_login_attempt( $user, $username, $password ) {
+        $ip = $this->get_client_ip();
+        $transient_name = 'woosuite_login_attempts_' . md5( $ip );
+        $attempts = get_transient( $transient_name );
+
+        // Limit: 3 attempts
+        if ( $attempts && $attempts >= 3 ) {
+             // Log the blocking event
+             $this->log_threat( $ip, 'Login Lockout (Too many attempts)', 'high', true );
+
+             return new WP_Error(
+                 'woosuite_lockout',
+                 '<strong>ERROR</strong>: Too many failed login attempts. Please try again in 15 minutes.'
+             );
+        }
+
+        return $user;
     }
 
     /**

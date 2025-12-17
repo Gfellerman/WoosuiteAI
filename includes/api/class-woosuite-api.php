@@ -163,6 +163,7 @@ class WooSuite_Api {
         $status = array(
             'firewall_enabled' => get_option( 'woosuite_firewall_enabled', 'yes' ) === 'yes',
             'spam_enabled' => get_option( 'woosuite_spam_protection_enabled', 'yes' ) === 'yes',
+            'login_enabled' => true, // Currently always active
             'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
             'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
         );

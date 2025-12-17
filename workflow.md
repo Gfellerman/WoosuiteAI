@@ -5,10 +5,14 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 
 ## Current Status
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
-*   **Security Module:** Fully implemented with PHP-based WAF, Local Logging (custom DB table), and Core File Integrity Scan.
-*   **Dashboard:** Security Hub now displays real logs and status fetched from the backend.
+*   **Security Module:** Fully implemented.
+    *   **WAF:** PHP-based XSS/SQLi protection.
+    *   **Scanner:** Core File Integrity check (Scheduled Twice Daily).
+    *   **Login Security:** Brute Force protection (3 attempts, 15min lockout).
+    *   **Logs:** Custom DB table for threats.
+*   **Dashboard:** Security Hub displays real status, logs, and toggle controls.
 *   **Deployment:** Successfully built and deployed to a test WordPress environment.
-*   **UI/UX:** Dashboard implemented. Layout Fixed (Grid system active).
+*   **UI/UX:** Dashboard implemented. Layout Fixed.
 
 ## Critical Fixes Required (Next Session Priority)
 1.  **Dashboard Polish:** Address any visual inconsistencies in other tabs (SEO, Orders).
@@ -39,6 +43,8 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 - [x] **Security Logs:** Created `wp_woosuite_security_logs` table and API endpoints to fetch logs.
 - [x] **Security Scan:** Implemented Core File Integrity Check.
 - [x] **Security UI:** Connected `SecurityHub.tsx` to real backend data (Logs, Status, Toggles).
+- [x] **Auto-Scan:** Implemented Twice Daily scheduled scans via WP Cron.
+- [x] **Login Protection:** Implemented Rate Limiting (3 attempts) using Transients.
 
 ## Development Environment Setup
 If you are starting a new session or configuring an agent environment:
@@ -80,8 +86,7 @@ To create a production-ready zip file that can be uploaded to WordPress:
     *   **Sales Insights:** specific insights on "Why sales dropped yesterday" using AI analysis of traffic vs. conversion.
 
 4.  **Security Hardening (Enhanced)**
-    *   **Login Protection:** 2FA and limit login attempts.
-    *   **Deep Scan:** Full filesystem scan for malware patterns.
+    *   **Deep Scan:** Full filesystem scan for malware patterns (Option B).
 
 5.  **Marketing Automation**
     *   **Abandoned Cart Recovery:** AI-generated emails to recover lost sales.
