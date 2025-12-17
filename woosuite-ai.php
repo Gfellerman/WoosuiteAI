@@ -3,7 +3,7 @@
  * Plugin Name: WooSuite AI
  * Plugin URI:  https://woosuite.ai
  * Description: The Ultimate All-in-One WordPress Plugin. Security, SEO, Marketing, Backup, and Speed - Powered by Gemini AI.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      WooSuite AI Team
  * Author URI:  https://woosuite.ai
  * License:     GPL-2.0+
@@ -16,7 +16,7 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 // Define Constants
-define( 'WOOSUITE_AI_VERSION', '1.0.0' );
+define( 'WOOSUITE_AI_VERSION', '1.0.1' );
 define( 'WOOSUITE_AI_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WOOSUITE_AI_URL', plugin_dir_url( __FILE__ ) );
 
