@@ -26,6 +26,11 @@ class WooSuite_Activator {
 		add_option( 'woosuite_spam_protection_enabled', 'yes' );
 		add_option( 'woosuite_threats_blocked_count', 0 );
 
+        // Schedule Automatic Scan
+        if ( ! wp_next_scheduled( 'woosuite_scheduled_scan' ) ) {
+			wp_schedule_event( time(), 'twicedaily', 'woosuite_scheduled_scan' );
+		}
+
         flush_rewrite_rules();
 	}
 }

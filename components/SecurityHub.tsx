@@ -5,6 +5,7 @@ import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRoun
 const SecurityHub: React.FC = () => {
   const [firewallEnabled, setFirewallEnabled] = useState(true);
   const [spamProtection, setSpamProtection] = useState(true);
+  const [loginEnabled, setLoginEnabled] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [lastScan, setLastScan] = useState<string>('Never');
@@ -26,6 +27,7 @@ const SecurityHub: React.FC = () => {
             const data = await res.json();
             setFirewallEnabled(data.firewall_enabled);
             setSpamProtection(data.spam_enabled);
+            setLoginEnabled(data.login_enabled);
             setLastScan(data.last_scan);
         }
     } catch (e) {
@@ -143,13 +145,15 @@ const SecurityHub: React.FC = () => {
         </div>
 
         {/* Login Security Card */}
-        <div className="p-5 rounded-xl border border-gray-200 bg-white">
+        <div className={`p-5 rounded-xl border transition-all ${loginEnabled ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
           <div className="flex justify-between items-start mb-2">
-             <KeyRound size={24} className="text-amber-600" />
-             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">2FA On</span>
+             <KeyRound size={24} className={loginEnabled ? 'text-amber-600' : 'text-gray-400'} />
+             <span className={`text-xs px-2 py-0.5 rounded-full ${loginEnabled ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+               {loginEnabled ? 'Active' : 'Disabled'}
+             </span>
           </div>
           <h3 className="font-bold text-gray-800">Login Security</h3>
-          <p className="text-xs text-gray-500 mt-1">Limit: 3 attempts</p>
+          <p className="text-xs text-gray-500 mt-1">Limit: 3 attempts • 15min Lockout</p>
         </div>
       </div>
 

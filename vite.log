@@ -9,3 +9,9 @@
   ➜  Network: http://192.168.0.2:3000/
 8:06:36 AM [vite] (client) hmr update /App.tsx, /index.css?direct, /index.css
 8:07:27 AM [vite] (client) page reload verify_security.py
+8:29:41 AM [vite] (client) page reload includes/class-woosuite-activator.php
+8:29:49 AM [vite] (client) page reload includes/class-woosuite-deactivator.php
+8:30:05 AM [vite] (client) page reload includes/class-woosuite-security.php
+8:30:15 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+8:30:31 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+8:31:21 AM [vite] (client) page reload workflow.md
