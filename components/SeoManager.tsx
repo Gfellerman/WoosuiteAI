@@ -19,7 +19,7 @@ const SeoManager: React.FC = () => {
   // Default to true as per plan, but in real app fetch from settings
   const [sitemapEnabled, setSitemapEnabled] = useState(true);
 
-  const { apiUrl, nonce, root } = window.woosuiteData || {};
+  const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
 
   useEffect(() => {
     fetchItems();
@@ -126,7 +126,7 @@ const SeoManager: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h2 className="text-2xl font-bold text-gray-800">AI SEO Manager</h2>
-            <p className="text-gray-500">Optimize content and images for Search Engines & LLMs.</p>
+            <p className="text-gray-500">Optimize for Traditional Search (Google, Bing) and AI Search (ChatGPT, Gemini).</p>
         </div>
         <div className="flex gap-2">
             <button
@@ -302,7 +302,7 @@ const SeoManager: React.FC = () => {
                           <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">Active</div>
                       </div>
                       <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-sm text-gray-600 font-mono">
-                          {root ? `${root}/sitemap.xml` : '/sitemap.xml'}
+                          {homeUrl ? `${homeUrl}/sitemap.xml` : '/sitemap.xml'}
                       </div>
                       <p className="text-xs text-gray-500">
                           This sitemap includes all Products, Posts, Pages, and Images. It is automatically added to your robots.txt.

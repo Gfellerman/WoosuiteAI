@@ -171,6 +171,10 @@ class WooSuite_Api {
         $id = $request->get_param( 'id' );
         $params = $request->get_json_params();
 
+        // Debug Log
+        error_log( "WooSuite AI: Update Content Item ID: $id" );
+        error_log( "WooSuite AI: Params: " . print_r( $params, true ) );
+
         // Validate content exists
         $post = get_post( $id );
         if ( ! $post ) {

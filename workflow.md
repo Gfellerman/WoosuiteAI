@@ -1,46 +1,30 @@
 # WooSuite AI - Development Workflow
 
 ## Project Overview
-WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace multiple single-purpose plugins. It leverages Google Gemini AI to automate and enhance Security, SEO, Marketing, Backups, and Speed Optimization.
+WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one WordPress plugin designed to replace multiple single-purpose plugins. It leverages Google Gemini AI to automate and enhance Security, SEO, Marketing, Backups, and Speed Optimization.
 
 ## Current Status
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
+*   **Branding:** Updated Author to "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
 *   **Security Module:** Fully implemented (WAF, Scanner, Login Protection, Logs).
-*   **SEO Module:** Significantly Enhanced.
-    *   **Scope:** Now supports Products, Posts, Pages, and Images.
-    *   **Sitemap:** Custom XML Sitemap generator created (includes Images).
-    *   **Image SEO:** AI-powered Alt Text and Title generation (using Base64 image analysis).
-    *   **Bulk Optimize:** Browser-based "Daisy Chain" processing implemented to avoid server timeouts.
-    *   **UI:** Tabbed interface for different content types.
+*   **SEO Module:** Fully Functional & Verified.
+    *   **Scope:** Supports Products, Posts, Pages, and Images.
+    *   **Features:** Bulk Optimization, Image Analysis, Custom Sitemap.
+    *   **Fixes:** Resolved data persistence issues with robust error handling and logging.
+    *   **UI:** Updated terminology to highlight "Traditional & AI Search" optimization.
 *   **Dashboard:** Fully functional Security and SEO tabs.
 
 ## Recent Changes
-- [x] **API Expansion:** Genericized `get_products` to `get_content_items` to support Posts, Pages, and Images.
-- [x] **Sitemap:** Created `WooSuite_Sitemap` class to generate `/sitemap.xml` and inject into `robots.txt`.
-- [x] **Frontend Types:** Updated `types.ts` with `ContentItem` union type.
-- [x] **Gemini Service:** Added `generateImageSeo` (handling Base64 conversion) and updated `generateSeoMeta`.
-- [x] **SEO UI:** Rewrote `SeoManager.tsx` to include Tabs, Bulk Optimization logic, and Sitemap Modal.
-- [x] **App Integration:** Updated `App.tsx` to work with the new API structure.
+- [x] **Branding:** Updated `woosuite-ai.php` author details.
+- [x] **SEO Persistence:** Enhanced `SeoManager.tsx` to trap and report save errors; added debug logging to `class-woosuite-api.php`.
+- [x] **UI Polish:** Updated SEO Manager header to explain value proposition (Search Engines + LLMs).
+- [x] **Testing:** Added `tests/` with mock verification scripts for API logic.
+- [x] **Build:** Re-compiled frontend assets.
 
-## Critical Fixes Required (Next Session Priority)
-1.  **Dashboard Polish:** Address any visual inconsistencies in other tabs (Orders).
+## Todo List (Next Priorities)
+1.  **Security UI Connection:** Ensure the Security page in React fully syncs with the Backend WAF status.
 2.  **Order Manager:** Implement real logic for Order Management features.
 3.  **Speed Module:** Begin implementation (Image Compression, Database Cleaner).
-
-## Completed Tasks
-- [x] Initial Repository Setup.
-- [x] Defined Hybrid Architecture.
-- [x] Created PHP Core (Activator, Deactivator, Admin Menu, API Handler).
-- [x] Set up React Environment (Vite, Tailwind, TypeScript).
-- [x] Implemented initial Dashboard UI.
-- [x] Verified Build Process (`npm run build`).
-- [x] **Fix Layout:** Adjusted `App.tsx` to use `min-h-screen`.
-- [x] **Backend API:** Implemented endpoints for Settings, Products (now Content), and Stats.
-- [x] **Real Data:** Connected Dashboard to real Order counts and SEO scores.
-- [x] **Settings:** Implemented secure API Key storage.
-- [x] **Assets:** Generated production build assets.
-- [x] **Security Module:** Implemented PHP WAF, Logs, Scan, Login Protection.
-- [x] **SEO Manager:** Complete rewrite for "Whole Site" support (Posts/Pages/Images) + Bulk Tools.
 
 ## Development Environment Setup
 If you are starting a new session or configuring an agent environment:
@@ -59,5 +43,4 @@ To create a production-ready zip file:
 
 ## Notes
 - Ensure all React components use the `woosuiteData` global object for API nonces and URLs.
-- Maintain compatibility with the latest WordPress version.
-- Sitemap is available at `/sitemap.xml` when enabled.
+- Debug logs for API actions are written to the server error log (look for "WooSuite AI").
