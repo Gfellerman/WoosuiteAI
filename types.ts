@@ -1,14 +1,24 @@
 export type ViewState = 'dashboard' | 'seo' | 'security' | 'search' | 'orders' | 'email' | 'backups' | 'settings';
 
-export interface Product {
+export type ContentType = 'product' | 'post' | 'page' | 'image';
+
+export interface ContentItem {
   id: number;
   name: string;
   description: string;
-  price: number;
+  type: ContentType;
   metaTitle?: string;
   metaDescription?: string;
-  llmSummary?: string; // For AI Search Optimization
+  llmSummary?: string;
+
+  // Type specific
+  price?: number;
+  imageUrl?: string;
+  altText?: string;
 }
+
+// Alias for backward compatibility
+export type Product = ContentItem;
 
 export interface Order {
   id: number;

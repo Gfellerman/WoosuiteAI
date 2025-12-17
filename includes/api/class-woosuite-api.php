@@ -31,15 +31,15 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
-        register_rest_route( $this->namespace, '/products', array(
+        register_rest_route( $this->namespace, '/content', array(
             'methods' => 'GET',
-            'callback' => array( $this, 'get_products' ),
+            'callback' => array( $this, 'get_content_items' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
-        register_rest_route( $this->namespace, '/products/(?P<id>\d+)', array(
+        register_rest_route( $this->namespace, '/content/(?P<id>\d+)', array(
             'methods' => 'POST',
-            'callback' => array( $this, 'update_product' ),
+            'callback' => array( $this, 'update_content_item' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
@@ -96,62 +96,114 @@ class WooSuite_Api {
         return new WP_REST_Response( array( 'apiKey' => $api_key ), 200 );
     }
 
-    public function get_products( $request ) {
-        if ( ! class_exists( 'WooCommerce' ) ) {
-            return new WP_REST_Response( array(), 200 );
-        }
+    public function get_content_items( $request ) {
+        $type = $request->get_param('type') ?: 'product';
+        $limit = $request->get_param('limit') ?: 50;
 
-        $args = array(
-            'limit' => 20,
-            'status' => 'publish',
-        );
-        $products = wc_get_products( $args );
         $data = array();
 
-        foreach ( $products as $product ) {
-            $data[] = array(
-                'id' => $product->get_id(),
-                'name' => $product->get_name(),
-                'description' => strip_tags( $product->get_short_description() ?: $product->get_description() ),
-                'price' => $product->get_price(),
-                'metaTitle' => get_post_meta( $product->get_id(), '_woosuite_meta_title', true ),
-                'metaDescription' => get_post_meta( $product->get_id(), '_woosuite_meta_description', true ),
-                'llmSummary' => get_post_meta( $product->get_id(), '_woosuite_llm_summary', true ),
+        // Handle Products (WooCommerce)
+        if ( $type === 'product' && class_exists( 'WooCommerce' ) ) {
+            $args = array(
+                'limit' => $limit,
+                'status' => 'publish',
             );
+            $products = wc_get_products( $args );
+            foreach ( $products as $product ) {
+                $data[] = array(
+                    'id' => $product->get_id(),
+                    'name' => $product->get_name(),
+                    'description' => strip_tags( $product->get_short_description() ?: $product->get_description() ),
+                    'price' => $product->get_price(),
+                    'metaTitle' => get_post_meta( $product->get_id(), '_woosuite_meta_title', true ),
+                    'metaDescription' => get_post_meta( $product->get_id(), '_woosuite_meta_description', true ),
+                    'llmSummary' => get_post_meta( $product->get_id(), '_woosuite_llm_summary', true ),
+                    'type' => 'product'
+                );
+            }
+            return new WP_REST_Response( $data, 200 );
+        }
+
+        // Handle Posts, Pages, Images
+        $args = array(
+            'numberposts' => $limit,
+            'post_status' => 'publish',
+        );
+
+        if ( $type === 'image' ) {
+            $args['post_type'] = 'attachment';
+            $args['post_status'] = 'inherit';
+            $args['post_mime_type'] = 'image';
+        } else {
+            $args['post_type'] = $type; // post, page
+        }
+
+        $posts = get_posts( $args );
+
+        foreach ( $posts as $post ) {
+            $item = array(
+                'id' => $post->ID,
+                'name' => $post->post_title,
+                'description' => strip_tags( $post->post_excerpt ?: $post->post_content ),
+                'metaTitle' => get_post_meta( $post->ID, '_woosuite_meta_title', true ),
+                'metaDescription' => get_post_meta( $post->ID, '_woosuite_meta_description', true ),
+                'llmSummary' => get_post_meta( $post->ID, '_woosuite_llm_summary', true ),
+                'type' => $type
+            );
+
+            // Add Image specific data
+            if ( $type === 'image' ) {
+                $item['imageUrl'] = wp_get_attachment_url( $post->ID );
+                $item['altText'] = get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
+                // Use caption for description if excerpt is empty
+                if ( empty( $item['description'] ) ) {
+                    $item['description'] = $post->post_excerpt;
+                }
+            }
+
+            $data[] = $item;
         }
 
         return new WP_REST_Response( $data, 200 );
     }
 
-    public function update_product( $request ) {
-        if ( ! class_exists( 'WooCommerce' ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'WooCommerce not found' ), 404 );
-        }
-
+    public function update_content_item( $request ) {
         $id = $request->get_param( 'id' );
         $params = $request->get_json_params();
 
-        // Validate product exists
-        $product = wc_get_product( $id );
-        if ( ! $product ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => 'Product not found' ), 404 );
+        // Validate content exists
+        $post = get_post( $id );
+        if ( ! $post ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => 'Content not found' ), 404 );
         }
 
-        // Update Meta
+        // Update Meta (Common)
         if ( isset( $params['metaTitle'] ) ) {
             update_post_meta( $id, '_woosuite_meta_title', sanitize_text_field( $params['metaTitle'] ) );
         }
         if ( isset( $params['metaDescription'] ) ) {
             update_post_meta( $id, '_woosuite_meta_description', sanitize_text_field( $params['metaDescription'] ) );
+
+            // Sync with Yoast/RankMath
+            update_post_meta( $id, '_yoast_wpseo_metadesc', sanitize_text_field( $params['metaDescription'] ) );
+            update_post_meta( $id, 'rank_math_description', sanitize_text_field( $params['metaDescription'] ) );
         }
         if ( isset( $params['llmSummary'] ) ) {
             update_post_meta( $id, '_woosuite_llm_summary', sanitize_textarea_field( $params['llmSummary'] ) );
         }
 
-        // Also update standard SEO plugins if present (interoperability)
-        if ( isset( $params['metaDescription'] ) ) {
-             update_post_meta( $id, '_yoast_wpseo_metadesc', sanitize_text_field( $params['metaDescription'] ) );
-             update_post_meta( $id, 'rank_math_description', sanitize_text_field( $params['metaDescription'] ) );
+        // Image Specific
+        if ( isset( $params['altText'] ) ) {
+            update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $params['altText'] ) );
+        }
+
+        // Update Title (Standard WP Post Title) - Useful for renaming images/posts
+        if ( isset( $params['title'] ) ) {
+             $post_update = array(
+                'ID' => $id,
+                'post_title' => sanitize_text_field( $params['title'] )
+             );
+             wp_update_post( $post_update );
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
