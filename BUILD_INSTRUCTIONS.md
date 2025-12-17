@@ -38,10 +38,11 @@ WooSuite AI uses a hybrid architecture with a PHP backend and a React frontend (
     *   `assets/` (the built JS/CSS)
     *   `vendor/` (if you add PHP composer dependencies later)
 
-    Example Zip Command:
+    **Recommended Method:** Use the provided build script:
     ```bash
-    zip -r woosuite-ai.zip woosuite-ai.php includes assets
+    sh build_plugin.sh
     ```
+    This script automatically installs dependencies, builds the React app, and creates the zip file with the correct exclusions.
 
 ## Architecture Notes
 
