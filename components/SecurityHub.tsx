@@ -1,23 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SecurityLog } from '../types';
 import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound } from 'lucide-react';
-
-const mockLogs: SecurityLog[] = [
-  { id: 1, ip: '192.168.1.105', event: 'SQL Injection Attempt', timestamp: '2 mins ago', severity: 'high', blocked: true },
-  { id: 2, ip: '45.32.11.90', event: 'Brute Force Login', timestamp: '15 mins ago', severity: 'medium', blocked: true },
-  { id: 3, ip: '10.0.0.5', event: 'XSS Probe', timestamp: '1 hour ago', severity: 'low', blocked: false },
-  { id: 4, ip: '203.11.44.2', event: 'Directory Traversal', timestamp: '3 hours ago', severity: 'high', blocked: true },
-  { id: 5, ip: '112.44.22.11', event: 'Spam Comment', timestamp: '5 hours ago', severity: 'medium', blocked: true },
-];
 
 const SecurityHub: React.FC = () => {
   const [firewallEnabled, setFirewallEnabled] = useState(true);
   const [spamProtection, setSpamProtection] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [lastScan, setLastScan] = useState<string>('Never');
 
-  const handleScan = () => {
+  const { apiUrl, nonce } = window.woosuiteData || {};
+
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetchStatus();
+    fetchLogs();
+  }, [apiUrl]);
+
+  const fetchStatus = async () => {
+    try {
+        const res = await fetch(`${apiUrl}/security/status`, {
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setFirewallEnabled(data.firewall_enabled);
+            setSpamProtection(data.spam_enabled);
+            setLastScan(data.last_scan);
+        }
+    } catch (e) {
+        console.error("Failed to fetch security status", e);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+        const res = await fetch(`${apiUrl}/security/logs`, {
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setLogs(data);
+        }
+    } catch (e) {
+        console.error("Failed to fetch logs", e);
+    }
+  };
+
+  const handleToggle = async (option: 'firewall' | 'spam', value: boolean) => {
+      // Optimistic update
+      if (option === 'firewall') setFirewallEnabled(value);
+      if (option === 'spam') setSpamProtection(value);
+
+      try {
+          await fetch(`${apiUrl}/security/toggle`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-WP-Nonce': nonce
+              },
+              body: JSON.stringify({ option, value })
+          });
+      } catch (e) {
+          console.error("Failed to toggle option", e);
+          // Revert on error?
+          fetchStatus();
+      }
+  };
+
+  const handleScan = async () => {
     setScanning(true);
-    setTimeout(() => setScanning(false), 2000);
+    try {
+        const res = await fetch(`${apiUrl}/security/scan`, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        if (res.ok) {
+            const result = await res.json();
+            console.log("Scan result:", result);
+            // Refresh status to get new last scan time
+            fetchStatus();
+        }
+    } catch (e) {
+        console.error("Scan failed", e);
+    } finally {
+        setScanning(false);
+    }
   };
 
   return (
@@ -40,7 +108,7 @@ const SecurityHub: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* WAF Card */}
         <div className={`p-5 rounded-xl border transition-all cursor-pointer ${firewallEnabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'}`}
-             onClick={() => setFirewallEnabled(!firewallEnabled)}>
+             onClick={() => handleToggle('firewall', !firewallEnabled)}>
           <div className="flex justify-between items-start mb-2">
             <Shield size={24} className={firewallEnabled ? 'text-green-600' : 'text-gray-400'} />
             <div className={`w-10 h-5 rounded-full p-1 transition-colors ${firewallEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
@@ -53,7 +121,7 @@ const SecurityHub: React.FC = () => {
 
         {/* Spam Card */}
         <div className={`p-5 rounded-xl border transition-all cursor-pointer ${spamProtection ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}
-             onClick={() => setSpamProtection(!spamProtection)}>
+             onClick={() => handleToggle('spam', !spamProtection)}>
           <div className="flex justify-between items-start mb-2">
              <EyeOff size={24} className={spamProtection ? 'text-blue-600' : 'text-gray-400'} />
              <div className={`w-10 h-5 rounded-full p-1 transition-colors ${spamProtection ? 'bg-blue-500' : 'bg-gray-300'}`}>
@@ -71,7 +139,7 @@ const SecurityHub: React.FC = () => {
              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Clean</span>
           </div>
           <h3 className="font-bold text-gray-800">File Integrity</h3>
-          <p className="text-xs text-gray-500 mt-1">Last scan: 2 mins ago</p>
+          <p className="text-xs text-gray-500 mt-1">Last scan: {lastScan}</p>
         </div>
 
         {/* Login Security Card */}
@@ -88,11 +156,17 @@ const SecurityHub: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
           <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-            <Activity size={18} className="text-gray-500"/> Live Threat Log
+            <Activity size={18} className="text-gray-500"/> Security Log
           </h3>
-          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">Nonce Verified</span>
+          <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">Real-time</span>
         </div>
         <div className="overflow-x-auto">
+          {logs.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                  <Shield size={32} className="mx-auto mb-2 text-gray-300" />
+                  No threats detected yet.
+              </div>
+          ) : (
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-500">
               <tr>
@@ -104,10 +178,10 @@ const SecurityHub: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {mockLogs.map((log) => (
+              {logs.map((log) => (
                 <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="p-4 text-gray-500">{log.timestamp}</td>
-                  <td className="p-4 font-mono text-gray-600">{log.ip}</td>
+                  <td className="p-4 text-gray-500">{log.created_at}</td>
+                  <td className="p-4 font-mono text-gray-600">{log.ip_address}</td>
                   <td className="p-4 font-medium text-gray-800">{log.event}</td>
                   <td className="p-4">
                     <span className={`px-2 py-1 rounded text-xs font-medium uppercase
@@ -117,7 +191,7 @@ const SecurityHub: React.FC = () => {
                     </span>
                   </td>
                   <td className="p-4">
-                    {log.blocked ? (
+                    {(log.blocked == 1 || log.blocked === true) ? (
                        <span className="flex items-center text-green-600 font-medium text-xs">
                          <Lock size={12} className="mr-1" /> Blocked
                        </span>
@@ -131,6 +205,7 @@ const SecurityHub: React.FC = () => {
               ))}
             </tbody>
           </table>
+          )}
         </div>
       </div>
     </div>

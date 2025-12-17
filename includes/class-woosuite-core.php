@@ -27,7 +27,15 @@ class WooSuite_Core {
 
         // Load the API handling class
         require_once WOOSUITE_AI_PATH . 'includes/api/class-woosuite-api.php';
+
+        // Load the Security class
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-security.php';
 	}
+
+    private function define_security_hooks() {
+        $plugin_security = new WooSuite_Security( $this->plugin_name, $this->version );
+        $plugin_security->init();
+    }
 
 	private function define_admin_hooks() {
 		$plugin_admin = new WooSuite_Admin( $this->plugin_name, $this->version );
@@ -42,6 +50,6 @@ class WooSuite_Core {
     }
 
 	public function run() {
-		// Hooks are registered in the constructor.
+        $this->define_security_hooks();
 	}
 }

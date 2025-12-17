@@ -42,6 +42,31 @@ class WooSuite_Api {
             'callback' => array( $this, 'get_stats' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
+
+        // Security Routes
+        register_rest_route( $this->namespace, '/security/logs', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_security_logs' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/status', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_security_status' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/toggle', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'toggle_security_option' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/scan', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'run_security_scan' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
     }
 
     public function get_status( $request ) {
@@ -124,6 +149,46 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( $stats, 200 );
+    }
+
+    // --- Security Endpoints ---
+
+    public function get_security_logs( $request ) {
+        $security = new WooSuite_Security( $this->plugin_name, $this->version );
+        $logs = $security->get_logs( 20 );
+        return new WP_REST_Response( $logs, 200 );
+    }
+
+    public function get_security_status( $request ) {
+        $status = array(
+            'firewall_enabled' => get_option( 'woosuite_firewall_enabled', 'yes' ) === 'yes',
+            'spam_enabled' => get_option( 'woosuite_spam_protection_enabled', 'yes' ) === 'yes',
+            'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
+            'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
+        );
+        return new WP_REST_Response( $status, 200 );
+    }
+
+    public function toggle_security_option( $request ) {
+        $params = $request->get_json_params();
+        $option = isset( $params['option'] ) ? $params['option'] : '';
+        $value = isset( $params['value'] ) ? $params['value'] : false;
+
+        if ( $option === 'firewall' ) {
+            update_option( 'woosuite_firewall_enabled', $value ? 'yes' : 'no' );
+        } elseif ( $option === 'spam' ) {
+            update_option( 'woosuite_spam_protection_enabled', $value ? 'yes' : 'no' );
+        } else {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid option' ), 400 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function run_security_scan( $request ) {
+        $security = new WooSuite_Security( $this->plugin_name, $this->version );
+        $result = $security->perform_core_scan();
+        return new WP_REST_Response( $result, 200 );
     }
 
     public function check_permission() {
