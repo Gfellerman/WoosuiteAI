@@ -21,11 +21,11 @@ export interface Order {
 
 export interface SecurityLog {
   id: number;
-  ip: string;
+  ip_address: string;
   event: string;
-  timestamp: string;
+  created_at: string;
   severity: 'low' | 'medium' | 'high';
-  blocked: boolean;
+  blocked: boolean | number; // DB returns 0/1 (number)
 }
 
 export interface Backup {

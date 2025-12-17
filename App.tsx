@@ -111,15 +111,6 @@ const App: React.FC = () => {
           <NavItem id="settings" label="Settings" icon={SettingsIcon} />
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-            <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                <p className="text-xs font-medium text-gray-500">API Usage</p>
-                <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 mb-1">
-                    <div className="bg-green-500 h-1.5 rounded-full w-[45%]"></div>
-                </div>
-                <p className="text-xs text-right text-gray-400">450 / 1000 credits</p>
-            </div>
-        </div>
       </aside>
 
       {/* Main Content */}
