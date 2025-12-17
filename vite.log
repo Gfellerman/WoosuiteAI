@@ -39,3 +39,10 @@
 11:19:12 AM [vite] (client) page reload includes/api/class-woosuite-api.php
 11:20:13 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
 11:20:26 AM [vite] (client) page reload workflow.md
+11:52:04 AM [vite] (client) page reload includes/class-woosuite-admin.php
+11:52:09 AM [vite] (client) page reload includes/class-woosuite-core.php
+11:52:28 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+11:52:50 AM [vite] (client) page reload includes/class-woosuite-security.php
+11:53:44 AM [vite] (client) page reload types.ts
+11:55:46 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+11:58:57 AM [vite] (client) page reload workflow.md

@@ -262,6 +262,9 @@ class WooSuite_Api {
         $status = array(
             'firewall_enabled' => get_option( 'woosuite_firewall_enabled', 'yes' ) === 'yes',
             'spam_enabled' => get_option( 'woosuite_spam_protection_enabled', 'yes' ) === 'yes',
+            'block_sqli' => get_option( 'woosuite_firewall_block_sqli', 'yes' ) === 'yes',
+            'block_xss' => get_option( 'woosuite_firewall_block_xss', 'yes' ) === 'yes',
+            'simulation_mode' => get_option( 'woosuite_firewall_simulation_mode', 'no' ) === 'yes',
             'login_enabled' => true, // Currently always active
             'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
             'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
@@ -274,10 +277,18 @@ class WooSuite_Api {
         $option = isset( $params['option'] ) ? $params['option'] : '';
         $value = isset( $params['value'] ) ? $params['value'] : false;
 
+        $value_str = $value ? 'yes' : 'no';
+
         if ( $option === 'firewall' ) {
-            update_option( 'woosuite_firewall_enabled', $value ? 'yes' : 'no' );
+            update_option( 'woosuite_firewall_enabled', $value_str );
         } elseif ( $option === 'spam' ) {
-            update_option( 'woosuite_spam_protection_enabled', $value ? 'yes' : 'no' );
+            update_option( 'woosuite_spam_protection_enabled', $value_str );
+        } elseif ( $option === 'block_sqli' ) {
+            update_option( 'woosuite_firewall_block_sqli', $value_str );
+        } elseif ( $option === 'block_xss' ) {
+            update_option( 'woosuite_firewall_block_xss', $value_str );
+        } elseif ( $option === 'simulation_mode' ) {
+            update_option( 'woosuite_firewall_simulation_mode', $value_str );
         } else {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid option' ), 400 );
         }

@@ -7,6 +7,7 @@ WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one Word
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
 *   **Branding:** Updated Author to "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
 *   **Security Module:** Fully implemented (WAF, Scanner, Login Protection, Logs).
+    *   **New Features:** Granular Blocking Controls (SQLi/XSS) and Simulation Mode.
     *   **Verification:** Added "Test Firewall" button to verify WAF efficacy against XSS/SQLi.
 *   **SEO Module:** Fully Functional & Verified.
     *   **Scope:** Supports Products, Posts, Pages, and Images.
@@ -16,6 +17,9 @@ WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one Word
 *   **Dashboard:** Fully functional Security and SEO tabs.
 
 ## Recent Changes
+- [x] **Security:** Added Granular Blocking Options (SQLi, XSS) and Simulation Mode to Backend and Frontend.
+- [x] **Bug Fix:** Fixed "Blank Screen" by injecting `type="module"` for Vite-built assets.
+- [x] **Verification:** Added `tests/test_waf_simulation.php` to verify firewall logic.
 - [x] **Verification Tools:** Added user-facing tools to verify Security (Test WAF) and SEO (Inspect Live).
 - [x] **Branding:** Updated `woosuite-ai.php` author details.
 - [x] **SEO Persistence:** Enhanced `SeoManager.tsx` to trap and report save errors; added debug logging to `class-woosuite-api.php`.

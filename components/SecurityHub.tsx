@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { SecurityLog } from '../types';
-import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound } from 'lucide-react';
+import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle } from 'lucide-react';
 
 const SecurityHub: React.FC = () => {
   const [firewallEnabled, setFirewallEnabled] = useState(true);
   const [spamProtection, setSpamProtection] = useState(true);
+
+  // Granular Security Controls
+  const [blockSqli, setBlockSqli] = useState(true);
+  const [blockXss, setBlockXss] = useState(true);
+  const [simulationMode, setSimulationMode] = useState(false);
+
   const [loginEnabled, setLoginEnabled] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
@@ -27,6 +33,12 @@ const SecurityHub: React.FC = () => {
             const data = await res.json();
             setFirewallEnabled(data.firewall_enabled);
             setSpamProtection(data.spam_enabled);
+
+            // Set granular options
+            setBlockSqli(data.block_sqli);
+            setBlockXss(data.block_xss);
+            setSimulationMode(data.simulation_mode);
+
             setLoginEnabled(data.login_enabled);
             setLastScan(data.last_scan);
         }
@@ -49,10 +61,13 @@ const SecurityHub: React.FC = () => {
     }
   };
 
-  const handleToggle = async (option: 'firewall' | 'spam', value: boolean) => {
+  const handleToggle = async (option: string, value: boolean) => {
       // Optimistic update
       if (option === 'firewall') setFirewallEnabled(value);
       if (option === 'spam') setSpamProtection(value);
+      if (option === 'block_sqli') setBlockSqli(value);
+      if (option === 'block_xss') setBlockXss(value);
+      if (option === 'simulation_mode') setSimulationMode(value);
 
       try {
           await fetch(`${apiUrl}/security/toggle`, {
@@ -63,10 +78,12 @@ const SecurityHub: React.FC = () => {
               },
               body: JSON.stringify({ option, value })
           });
+
+          // Refresh status to ensure consistency (e.g., side effects)
+          fetchStatus();
       } catch (e) {
           console.error("Failed to toggle option", e);
-          // Revert on error?
-          fetchStatus();
+          fetchStatus(); // Revert on error
       }
   };
 
@@ -166,6 +183,64 @@ const SecurityHub: React.FC = () => {
           <p className="text-xs text-gray-500 mt-1">Limit: 3 attempts • 15min Lockout</p>
         </div>
       </div>
+
+      {/* Detailed Configuration Panel */}
+      {firewallEnabled && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Shield size={20} className="text-indigo-600"/> Firewall Configuration
+                </h3>
+                <div className="flex items-center gap-3 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                     <span className="text-sm font-medium text-gray-600">Simulation Mode</span>
+                     <button
+                        onClick={() => handleToggle('simulation_mode', !simulationMode)}
+                        className={`w-10 h-5 rounded-full p-1 transition-colors focus:outline-none ${simulationMode ? 'bg-amber-500' : 'bg-gray-300'}`}
+                     >
+                        <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${simulationMode ? 'translate-x-5' : ''}`} />
+                     </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-indigo-200 transition-colors">
+                    <div>
+                        <span className="block font-medium text-gray-800">Block SQL Injection</span>
+                        <span className="text-xs text-gray-500">Prevents database manipulation attacks (SQLi)</span>
+                    </div>
+                    <button
+                        onClick={() => handleToggle('block_sqli', !blockSqli)}
+                        className={`w-10 h-5 rounded-full p-1 transition-colors focus:outline-none ${blockSqli ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                    >
+                        <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${blockSqli ? 'translate-x-5' : ''}`} />
+                    </button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:border-indigo-200 transition-colors">
+                    <div>
+                        <span className="block font-medium text-gray-800">Block XSS</span>
+                        <span className="text-xs text-gray-500">Prevents Cross-Site Scripting attacks</span>
+                    </div>
+                    <button
+                        onClick={() => handleToggle('block_xss', !blockXss)}
+                        className={`w-10 h-5 rounded-full p-1 transition-colors focus:outline-none ${blockXss ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                    >
+                        <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${blockXss ? 'translate-x-5' : ''}`} />
+                    </button>
+                </div>
+            </div>
+
+            {simulationMode && (
+                <div className="mt-4 p-4 bg-amber-50 text-amber-800 text-sm rounded-lg border border-amber-100 flex items-start gap-3">
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <div>
+                        <p className="font-semibold">Simulation Mode Active</p>
+                        <p className="text-amber-700/80 mt-0.5">Threats will be logged but <strong>NOT blocked</strong>. Use this to safely test the firewall rules without affecting legitimate users.</p>
+                    </div>
+                </div>
+            )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
