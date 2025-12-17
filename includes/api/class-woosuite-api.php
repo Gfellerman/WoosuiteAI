@@ -37,6 +37,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/products/(?P<id>\d+)', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'update_product' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/stats', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_stats' ),
@@ -115,6 +121,40 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( $data, 200 );
+    }
+
+    public function update_product( $request ) {
+        if ( ! class_exists( 'WooCommerce' ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'WooCommerce not found' ), 404 );
+        }
+
+        $id = $request->get_param( 'id' );
+        $params = $request->get_json_params();
+
+        // Validate product exists
+        $product = wc_get_product( $id );
+        if ( ! $product ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => 'Product not found' ), 404 );
+        }
+
+        // Update Meta
+        if ( isset( $params['metaTitle'] ) ) {
+            update_post_meta( $id, '_woosuite_meta_title', sanitize_text_field( $params['metaTitle'] ) );
+        }
+        if ( isset( $params['metaDescription'] ) ) {
+            update_post_meta( $id, '_woosuite_meta_description', sanitize_text_field( $params['metaDescription'] ) );
+        }
+        if ( isset( $params['llmSummary'] ) ) {
+            update_post_meta( $id, '_woosuite_llm_summary', sanitize_textarea_field( $params['llmSummary'] ) );
+        }
+
+        // Also update standard SEO plugins if present (interoperability)
+        if ( isset( $params['metaDescription'] ) ) {
+             update_post_meta( $id, '_yoast_wpseo_metadesc', sanitize_text_field( $params['metaDescription'] ) );
+             update_post_meta( $id, 'rank_math_description', sanitize_text_field( $params['metaDescription'] ) );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
     }
 
     public function get_stats( $request ) {

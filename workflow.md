@@ -87,6 +87,7 @@ To create a production-ready zip file that can be uploaded to WordPress:
 
 4.  **Security Hardening (Enhanced)**
     *   **Deep Scan:** Full filesystem scan for malware patterns (Option B).
+    *   **2FA Authentication:** Mandatory for Admins, Optional for Customers (Deferred).
 
 5.  **Marketing Automation**
     *   **Abandoned Cart Recovery:** AI-generated emails to recover lost sales.
