@@ -7,7 +7,14 @@ WooSuite AI is a comprehensive, all-in-one WordPress plugin designed to replace 
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
 *   **Core Structure:** Plugin files created, React app configured with Vite & Tailwind CSS.
 *   **Deployment:** Successfully built and deployed to a test WordPress environment.
-*   **UI/UX:** Dashboard implemented with connectivity to real backend data.
+*   **UI/UX:** Dashboard implemented. **Layout Fixed** (Grid system active).
+*   **Known Issues:** "Fake Data" artifacts persist in `App.tsx` and `SecurityHub.tsx`. These are prioritized for removal.
+
+## Critical Fixes Required (Next Session Priority)
+The following sources of "fake data" and visual confusion have been identified and must be removed/fixed immediately:
+1.  **App.tsx:** Remove hardcoded "API Usage: 450/1000" widget.
+2.  **Dashboard.tsx:** Fix SEO Health chart to show "Empty/Gray" instead of "Green" when data is missing (Score 0).
+3.  **SecurityHub.tsx:** Remove mock security logs (`mockLogs` array) and disable/tag the "Run Malware Scan" button as "Coming Soon".
 
 ## Completed Tasks
 - [x] Initial Repository Setup.
