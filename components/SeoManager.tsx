@@ -10,11 +10,38 @@ interface SeoManagerProps {
 
 const SeoManager: React.FC<SeoManagerProps> = ({ products, onUpdateProduct }) => {
   const [generating, setGenerating] = useState<number | null>(null);
+  const { apiUrl, nonce } = window.woosuiteData || {};
 
   const handleGenerate = async (product: Product) => {
     setGenerating(product.id);
     try {
       const result = await generateSeoMeta(product);
+
+      // Save to Backend
+      if (apiUrl && nonce) {
+          try {
+              const saveRes = await fetch(`${apiUrl}/products/${product.id}`, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'X-WP-Nonce': nonce
+                  },
+                  body: JSON.stringify({
+                      metaTitle: result.title,
+                      metaDescription: result.description,
+                      llmSummary: result.llmSummary
+                  })
+              });
+
+              if (!saveRes.ok) {
+                  console.warn("Failed to persist SEO data to backend.");
+              }
+          } catch (err) {
+              console.error("API Error:", err);
+          }
+      }
+
+      // Update UI
       onUpdateProduct({
         ...product,
         metaTitle: result.title,
