@@ -309,12 +309,15 @@ const SecurityHub: React.FC = () => {
                 </button>
             </div>
 
-            <button
-                onClick={() => setShowDeepScanModal(true)}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition flex items-center gap-2 shadow-sm ml-2"
-            >
-                <Scan size={18} /> Deep Scan
-            </button>
+            {/* Deep Scan Button: Only visible on Dashboard tab */}
+            {activeTab === 'dashboard' && (
+                <button
+                    onClick={() => setShowDeepScanModal(true)}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition flex items-center gap-2 shadow-sm ml-2"
+                >
+                    <Scan size={18} /> Deep Scan
+                </button>
+            )}
         </div>
       </div>
 

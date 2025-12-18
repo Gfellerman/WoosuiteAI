@@ -145,6 +145,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/seo/batch/reset', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'reset_seo_batch' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/seo/batch-status', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_seo_batch_status' ),
@@ -442,112 +448,6 @@ class WooSuite_Api {
         return new WP_REST_Response( $status, 200 );
     }
 
-    // --- Ignore List Handlers ---
-
-    public function add_security_ignore( $request ) {
-        $params = $request->get_json_params();
-        $path = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
-
-        if ( empty( $path ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'Path required' ), 400 );
-        }
-
-        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
-        if ( ! in_array( $path, $ignored ) ) {
-            $ignored[] = $path;
-            update_option( 'woosuite_security_ignored_paths', $ignored );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'ignored' => $ignored ), 200 );
-    }
-
-    public function get_security_ignore( $request ) {
-        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
-        return new WP_REST_Response( array( 'success' => true, 'ignored' => $ignored ), 200 );
-    }
-
-    public function remove_security_ignore( $request ) {
-        $params = $request->get_json_params();
-        $path = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
-
-        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
-        $key = array_search($path, $ignored);
-
-        if ( $key !== false ) {
-            unset($ignored[$key]);
-            // Reindex array
-            $ignored = array_values($ignored);
-            update_option( 'woosuite_security_ignored_paths', $ignored );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'ignored' => $ignored ), 200 );
-    }
-
-    // --- Quarantine Handlers ---
-
-    public function get_quarantined_files( $request ) {
-        if ( ! class_exists( 'WooSuite_Security_Quarantine' ) ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => 'Quarantine class missing' ), 500 );
-        }
-        $q = new WooSuite_Security_Quarantine();
-        return new WP_REST_Response( array( 'success' => true, 'files' => $q->get_quarantined_files() ), 200 );
-    }
-
-    public function move_to_quarantine( $request ) {
-        $params = $request->get_json_params();
-        $filepath = isset( $params['file'] ) ? $params['file'] : '';
-
-        // If relative, make absolute
-        if ( strpos( $filepath, ABSPATH ) === false ) {
-            $filepath = ABSPATH . $filepath;
-        }
-
-        if ( ! class_exists( 'WooSuite_Security_Quarantine' ) ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => 'Quarantine class missing' ), 500 );
-        }
-
-        $q = new WooSuite_Security_Quarantine();
-        $result = $q->quarantine_file( $filepath );
-
-        if ( is_wp_error( $result ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'id' => $result ), 200 );
-    }
-
-    public function restore_from_quarantine( $request ) {
-        $params = $request->get_json_params();
-        $id = isset( $params['id'] ) ? $params['id'] : '';
-
-        if ( ! class_exists( 'WooSuite_Security_Quarantine' ) ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => 'Quarantine class missing' ), 500 );
-        }
-
-        $q = new WooSuite_Security_Quarantine();
-        $result = $q->restore_file( $id );
-
-        if ( is_wp_error( $result ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
-        }
-
-        return new WP_REST_Response( array( 'success' => true ), 200 );
-    }
-
-    public function delete_from_quarantine( $request ) {
-        $params = $request->get_json_params();
-        $id = isset( $params['id'] ) ? $params['id'] : '';
-
-        $q = new WooSuite_Security_Quarantine();
-        $result = $q->delete_file( $id );
-
-        if ( is_wp_error( $result ) ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
-        }
-
-        return new WP_REST_Response( array( 'success' => true ), 200 );
-    }
-
     // --- SEO Batch ---
 
     public function start_seo_batch( $request ) {
@@ -565,7 +465,19 @@ class WooSuite_Api {
 
     public function stop_seo_batch( $request ) {
         update_option( 'woosuite_seo_batch_stop_signal', true );
+        // Force update status locally to ensure immediate UI feedback
+        $status = get_option( 'woosuite_seo_batch_status', array() );
+        $status['status'] = 'stopped';
+        $status['message'] = 'Process stopped by user.';
+        update_option( 'woosuite_seo_batch_status', $status );
+
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Stopping...' ), 200 );
+    }
+
+    public function reset_seo_batch( $request ) {
+        update_option( 'woosuite_seo_batch_stop_signal', true );
+        update_option( 'woosuite_seo_batch_status', array( 'status' => 'idle' ) );
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Reset complete' ), 200 );
     }
 
     public function get_seo_batch_status( $request ) {

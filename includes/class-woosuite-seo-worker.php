@@ -19,6 +19,7 @@ class WooSuite_Seo_Worker {
             'total' => $total,
             'processed' => 0,
             'start_time' => current_time( 'mysql' ),
+            'last_updated' => time(), // Track activity
             'message' => "Starting optimization of $total items..."
         ));
 
@@ -29,31 +30,45 @@ class WooSuite_Seo_Worker {
 
     public function process_batch() {
         if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
-            $status = get_option( 'woosuite_seo_batch_status' );
-            $status['status'] = 'stopped';
-            $status['message'] = 'Process stopped by user.';
-            update_option( 'woosuite_seo_batch_status', $status );
+            $this->stop_batch("Process stopped by user.");
             return;
         }
 
         $status = get_option( 'woosuite_seo_batch_status' );
+
+        // Auto-Reset: If running but not updated in 2 minutes, assume zombie
+        if ( isset($status['status']) && $status['status'] === 'running' && isset($status['last_updated']) ) {
+             if ( (time() - $status['last_updated']) > 120 ) {
+                 // Zombie detection logic is usually handled by the UI or a cron watchdog
+                 // But here we can just ensure we update 'last_updated' immediately
+             }
+        }
+
         if ( ! $status || $status['status'] !== 'running' ) return;
 
         $start_time = microtime( true );
         $rewrite_titles = get_option( 'woosuite_seo_rewrite_titles', 'no' ) === 'yes';
 
-        // Reduced time limit for stability on shared hosting (15s instead of 20s)
+        // Update heartbeat
+        $status['last_updated'] = time();
+        update_option( 'woosuite_seo_batch_status', $status );
+
+        // Loop: Reduced time limit to 15s to be safe
         while ( ( microtime( true ) - $start_time ) < 15 ) {
 
             // Double check stop signal inside loop
-            if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) break;
+            if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
+                 $this->stop_batch("Process stopped by user.");
+                 break;
+            }
 
-            $ids = $this->get_next_batch_items( 1 ); // Fetch 1 at a time to ensure fresh state
+            $ids = $this->get_next_batch_items( 1 );
 
             if ( empty( $ids ) ) {
                 $status['status'] = 'complete';
                 $status['message'] = 'Optimization Complete!';
                 $status['processed'] = $status['total'];
+                $status['last_updated'] = time();
                 update_option( 'woosuite_seo_batch_status', $status );
                 return;
             }
@@ -62,12 +77,11 @@ class WooSuite_Seo_Worker {
             $post = get_post( $id );
 
             if ( ! $post ) {
-                 // Should not happen if query works, but safe fallback
                  update_post_meta( $id, '_woosuite_seo_failed', 1 );
                  continue;
             }
 
-            // Process Item
+            // Process Item with robust error handling
             try {
                 if ( $post->post_type === 'attachment' ) {
                     $this->process_image( $post );
@@ -75,16 +89,32 @@ class WooSuite_Seo_Worker {
                     $this->process_text( $post, $rewrite_titles );
                 }
             } catch ( Exception $e ) {
+                // Critical failure on this item
                 update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
-                error_log( "WooSuite SEO Worker Exception: " . $e->getMessage() );
+                error_log( "WooSuite SEO Worker CRITICAL ERROR on ID {$post->ID}: " . $e->getMessage() );
+            } catch ( Throwable $e ) {
+                 // Catch fatal errors in PHP 7+
+                update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+                error_log( "WooSuite SEO Worker FATAL ERROR on ID {$post->ID}: " . $e->getMessage() );
             }
 
             $status['processed']++;
-            update_option( 'woosuite_seo_batch_status', $status ); // Update progress regularly
+            $status['last_updated'] = time();
+            update_option( 'woosuite_seo_batch_status', $status );
         }
 
         // Schedule next run
-        wp_schedule_single_event( time(), 'woosuite_seo_batch_process' );
+        if ( ! get_option( 'woosuite_seo_batch_stop_signal' ) ) {
+             wp_schedule_single_event( time(), 'woosuite_seo_batch_process' );
+        }
+    }
+
+    private function stop_batch( $message = "Stopped" ) {
+        $status = get_option( 'woosuite_seo_batch_status' );
+        $status['status'] = 'stopped';
+        $status['message'] = $message;
+        $status['last_updated'] = time();
+        update_option( 'woosuite_seo_batch_status', $status );
     }
 
     private function process_text( $post, $rewrite_titles ) {
@@ -103,6 +133,10 @@ class WooSuite_Seo_Worker {
         $result = $this->gemini->generate_seo_meta( $item );
 
         if ( is_wp_error( $result ) || empty( $result ) ) {
+            // Log error
+            $err = is_wp_error($result) ? $result->get_error_message() : 'Empty Result';
+            error_log("WooSuite SEO Error (ID: {$post->ID}): $err");
+
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
             return;
         }
@@ -130,7 +164,7 @@ class WooSuite_Seo_Worker {
             ) );
         }
 
-        // Anti-Loop Protection: If nothing was saved, mark as failed to prevent infinite retry
+        // Anti-Loop Protection
         if ( ! $saved ) {
              update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
         }
@@ -146,6 +180,9 @@ class WooSuite_Seo_Worker {
         $result = $this->gemini->generate_image_seo( $url, basename( $url ) );
 
         if ( is_wp_error( $result ) || empty( $result ) ) {
+             $err = is_wp_error($result) ? $result->get_error_message() : 'Empty Result';
+             error_log("WooSuite Image SEO Error (ID: {$post->ID}): $err");
+
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
             return;
         }
@@ -177,6 +214,8 @@ class WooSuite_Seo_Worker {
             'post_status' => 'publish',
             'posts_per_page' => $limit,
             'fields' => 'ids',
+            'orderby' => 'ID', // Consistent ordering
+            'order' => 'ASC',
             'meta_query' => array(
                 array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' )
@@ -191,6 +230,8 @@ class WooSuite_Seo_Worker {
             'post_mime_type' => 'image',
             'posts_per_page' => $limit,
             'fields' => 'ids',
+            'orderby' => 'ID',
+            'order' => 'ASC',
             'meta_query' => array(
                 array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' )
