@@ -99,16 +99,26 @@ class WooSuite_Api {
     public function get_content_items( $request ) {
         $type = $request->get_param('type') ?: 'product';
         $limit = $request->get_param('limit') ?: 50;
+        $page = $request->get_param('page') ?: 1;
 
         $data = array();
+        $total = 0;
+        $pages = 0;
 
         // Handle Products (WooCommerce)
         if ( $type === 'product' && class_exists( 'WooCommerce' ) ) {
             $args = array(
                 'limit' => $limit,
+                'page' => $page,
+                'paginate' => true,
                 'status' => 'publish',
             );
-            $products = wc_get_products( $args );
+            $results = wc_get_products( $args );
+
+            $products = $results->products;
+            $total = $results->total;
+            $pages = $results->max_num_pages;
+
             foreach ( $products as $product ) {
                 $data[] = array(
                     'id' => $product->get_id(),
@@ -122,12 +132,13 @@ class WooSuite_Api {
                     'permalink' => get_permalink( $product->get_id() )
                 );
             }
-            return new WP_REST_Response( $data, 200 );
+            return new WP_REST_Response( array( 'items' => $data, 'total' => $total, 'pages' => $pages ), 200 );
         }
 
         // Handle Posts, Pages, Images
         $args = array(
-            'numberposts' => $limit,
+            'posts_per_page' => $limit,
+            'paged' => $page,
             'post_status' => 'publish',
         );
 
@@ -139,7 +150,10 @@ class WooSuite_Api {
             $args['post_type'] = $type; // post, page
         }
 
-        $posts = get_posts( $args );
+        $query = new WP_Query( $args );
+        $posts = $query->posts;
+        $total = $query->found_posts;
+        $pages = $query->max_num_pages;
 
         foreach ( $posts as $post ) {
             $item = array(
@@ -167,7 +181,7 @@ class WooSuite_Api {
             $data[] = $item;
         }
 
-        return new WP_REST_Response( $data, 200 );
+        return new WP_REST_Response( array( 'items' => $data, 'total' => $total, 'pages' => $pages ), 200 );
     }
 
     public function update_content_item( $request ) {
