@@ -9,5 +9,12 @@ Since the development environment may not have a running WordPress instance or P
 If you have PHP CLI installed:
 ```bash
 php tests/test_api_logic.php
+php tests/test_waf_simulation.php
 ```
 (Note: You might need to adjust paths if running from root).
+
+## WAF Simulation Test
+`test_waf_simulation.php` verifies the Firewall logic, including:
+- Blocking SQL Injection attempts.
+- Respecting "Simulation Mode" (logging without blocking).
+- Respecting granular toggles (e.g. disabling SQLi blocking).

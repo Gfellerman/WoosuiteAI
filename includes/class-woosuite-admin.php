@@ -57,4 +57,14 @@ class WooSuite_Admin {
             'apiKey' => get_option( 'woosuite_gemini_api_key', '' )
         ));
 	}
+
+    /**
+     * Add type="module" to the script tag for Vite support.
+     */
+    public function add_type_attribute( $tag, $handle, $src ) {
+        if ( $this->plugin_name !== $handle ) {
+            return $tag;
+        }
+        return '<script type="module" src="' . esc_url( $src ) . '"></script>';
+    }
 }

@@ -39,6 +39,17 @@ export interface SecurityLog {
   blocked: boolean | number; // DB returns 0/1 (number)
 }
 
+export interface SecurityStatus {
+  firewall_enabled: boolean;
+  spam_enabled: boolean;
+  block_sqli: boolean;
+  block_xss: boolean;
+  simulation_mode: boolean;
+  login_enabled: boolean;
+  last_scan: string;
+  threats_blocked: number;
+}
+
 export interface Backup {
   id: number;
   name: string;

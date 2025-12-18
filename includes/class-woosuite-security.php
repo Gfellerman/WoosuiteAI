@@ -44,54 +44,71 @@ class WooSuite_Security {
         $user_agent = isset( $_SERVER['HTTP_USER_AGENT'] ) ? $_SERVER['HTTP_USER_AGENT'] : '';
         $request_uri = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : '';
 
-        // 1. Check for basic SQL Injection patterns
-        $sqli_patterns = array(
-            'union select',
-            'union all select',
-            'drop table',
-            'information_schema',
-            'or 1=1',
-        );
+        $simulation_mode = get_option( 'woosuite_firewall_simulation_mode', 'no' ) === 'yes';
+        $block_sqli = get_option( 'woosuite_firewall_block_sqli', 'yes' ) === 'yes';
+        $block_xss = get_option( 'woosuite_firewall_block_xss', 'yes' ) === 'yes';
 
-        foreach ( $request_data as $key => $value ) {
-            if ( is_array( $value ) ) continue; // Skip arrays for now
-            $value_lower = strtolower( urldecode( $value ) );
-            foreach ( $sqli_patterns as $pattern ) {
-                if ( strpos( $value_lower, $pattern ) !== false ) {
-                    $this->block_request( 'SQL Injection Attempt', 'high' );
+        // 1. Check for basic SQL Injection patterns
+        if ( $block_sqli ) {
+            $sqli_patterns = array(
+                'union select',
+                'union all select',
+                'drop table',
+                'information_schema',
+                'or 1=1',
+            );
+
+            foreach ( $request_data as $key => $value ) {
+                if ( is_array( $value ) ) continue; // Skip arrays for now
+                $value_lower = strtolower( urldecode( $value ) );
+                foreach ( $sqli_patterns as $pattern ) {
+                    if ( strpos( $value_lower, $pattern ) !== false ) {
+                        $this->block_request( 'SQL Injection Attempt', 'high', $simulation_mode );
+                        if ( $simulation_mode ) break; // Log once per request in sim mode
+                    }
                 }
             }
         }
 
         // 2. Check for XSS (Cross Site Scripting)
-        $xss_patterns = array(
-            '<script>',
-            'javascript:',
-            'onload=',
-            'onerror=',
-        );
+        if ( $block_xss ) {
+            $xss_patterns = array(
+                '<script>',
+                'javascript:',
+                'onload=',
+                'onerror=',
+            );
 
-        foreach ( $request_data as $key => $value ) {
-            if ( is_array( $value ) ) continue;
-            $value_lower = strtolower( urldecode( $value ) );
-            foreach ( $xss_patterns as $pattern ) {
-                if ( strpos( $value_lower, $pattern ) !== false ) {
-                    $this->block_request( 'XSS Attempt', 'medium' );
+            foreach ( $request_data as $key => $value ) {
+                if ( is_array( $value ) ) continue;
+                $value_lower = strtolower( urldecode( $value ) );
+                foreach ( $xss_patterns as $pattern ) {
+                    if ( strpos( $value_lower, $pattern ) !== false ) {
+                        $this->block_request( 'XSS Attempt', 'medium', $simulation_mode );
+                        if ( $simulation_mode ) break;
+                    }
                 }
             }
         }
 
-        // 3. Path Traversal
+        // 3. Path Traversal (Always check if firewall enabled)
         if ( strpos( $request_uri, '../' ) !== false || strpos( $request_uri, '..\\' ) !== false ) {
-            $this->block_request( 'Path Traversal', 'high' );
+            $this->block_request( 'Path Traversal', 'high', $simulation_mode );
         }
     }
 
     /**
      * Blocks the request and logs it.
      */
-    private function block_request( $reason, $severity ) {
+    private function block_request( $reason, $severity, $simulation_mode = false ) {
         $ip = $this->get_client_ip();
+
+        if ( $simulation_mode ) {
+            // Log as 'not blocked' but add [Simulated] to event
+            $this->log_threat( $ip, $reason . ' [Simulated]', $severity, false );
+            return; // Do not die
+        }
+
         $this->log_threat( $ip, $reason, $severity, true );
 
         // Update total blocked count

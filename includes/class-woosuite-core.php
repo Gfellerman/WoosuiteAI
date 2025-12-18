@@ -50,6 +50,7 @@ class WooSuite_Core {
 		add_action( 'admin_menu', array( $plugin_admin, 'add_plugin_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $plugin_admin, 'enqueue_styles' ) );
 		add_action( 'admin_enqueue_scripts', array( $plugin_admin, 'enqueue_scripts' ) );
+        add_filter( 'script_loader_tag', array( $plugin_admin, 'add_type_attribute' ), 10, 3 );
 	}
 
     private function define_api_hooks() {
