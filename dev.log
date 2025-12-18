@@ -8,3 +8,4 @@
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://192.168.0.2:3000/
 4:08:31 AM [vite] (client) page reload verification/verify_seo.py
+4:58:20 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
