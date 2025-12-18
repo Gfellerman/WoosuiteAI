@@ -23,7 +23,7 @@ const SecurityHub: React.FC = () => {
   const [showDeepScanModal, setShowDeepScanModal] = useState(false);
   const [deepScanStatus, setDeepScanStatus] = useState<any>(null);
 
-  const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
+  const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -435,6 +435,34 @@ const SecurityHub: React.FC = () => {
             </div>
         </div>
       )}
+
+      {/* Advanced Security Options */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Lock size={20} className="text-red-600"/> High Security Mode (Heavy)
+                </h3>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-100">
+                <div className="max-w-2xl">
+                    <span className="block font-bold text-gray-800">Enable Strict WAF & Geo-Blocking</span>
+                    <p className="text-sm text-gray-600 mt-1">
+                        Enables heavy-duty country blocking and signature-based scanning (similar to Wordfence).
+                        <br/>
+                        <span className="text-red-600 font-semibold">Warning:</span> This requires significant server resources and may slow down page loads by 100-300ms.
+                    </p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                    <button
+                        disabled={true}
+                        className="bg-gray-100 text-gray-400 px-4 py-2 rounded-lg font-medium cursor-not-allowed border border-gray-200"
+                    >
+                        Coming Soon
+                    </button>
+                </div>
+            </div>
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">

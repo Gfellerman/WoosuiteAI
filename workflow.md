@@ -11,19 +11,21 @@ WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one Word
     *   **Deep Scan:** Background process scanning `wp-content/plugins` and `themes` for malware patterns (`eval`, `shell_exec`, etc.).
     *   **Login Protection:** Configurable max retries (default 3) and lockout.
     *   **Spam Protection:** Honeypot field and Link Limiter for comments.
-    *   **UI:** Added Deep Scan Modal, Progress bar, and granular configuration panels.
-*   **SEO Module:** Fully Functional & Verified.
+    *   **Advanced:** Added "High Security Mode" (Heavy) UI placeholder/warning.
+*   **SEO Module:** Fully Functional & Enhanced.
     *   **Scope:** Products, Posts, Pages, and Images.
-    *   **Batching:** Background worker for bulk optimization.
-    *   **Fixes:** Resolved "Unoptimized" filter logic in API.
+    *   **Batching:** Upgraded background worker (Time-based loop, Stop Capability).
+    *   **Image SEO:** Server-side processing (PHP) for reliability.
+    *   **Title Rewrite:** Option to "Simplify Product Names" using AI.
+    *   **Fixes:** Resolved "Unoptimized" filter logic in API (verified).
 *   **Dashboard:** Fully functional Security and SEO tabs.
 
 ## Recent Changes
-- [x] **SEO Fix:** Fixed API logic to correctly filter unoptimized items using robust `meta_query`.
-- [x] **Security Deep Scan:** Implemented `WooSuite_Security_Scanner` (Background Process) and Frontend UI with Progress/Results.
-- [x] **Security Enhancements:** Added Honeypot (Spam) and Configurable Login Protection (Max Retries).
-- [x] **UI Updates:** Added "Deep Scan" modal, "Auto-scan every 12h" text, and Login Configuration panel.
-- [x] **Verification:** Verified Security UI with Playwright and screenshot.
+- [x] **SEO Batch Upgrade:** Implemented Time-Based Loop (20s) and Stop Button for background optimization.
+- [x] **Image SEO:** Moved image analysis to PHP backend to solve client-side CORS/filename issues.
+- [x] **Product Titles:** Added "Simplify Product Names" (Max 6 words) option to SEO Batch.
+- [x] **SEO Filter Fix:** Rewrote `get_content_items` to strictly exclude optimized items (Green status).
+- [x] **Security UI:** Added "High Security Mode" (Heavy) toggle placeholder with performance warning.
 
 ## Todo List (Next Priorities)
 1.  **Order Manager:** Implement real logic for Order Management features.
