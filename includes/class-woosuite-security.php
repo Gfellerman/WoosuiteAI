@@ -35,6 +35,18 @@ class WooSuite_Security {
             return;
         }
 
+        $ip = $this->get_client_ip();
+
+        // Check if IP is Banned (Reputation Check)
+        if ( $this->check_ip_reputation( $ip ) ) {
+             wp_die(
+                '<h1>Access Denied</h1><p>Your IP address has been temporarily blocked due to suspicious activity.</p>',
+                'WooSuite Security',
+                array( 'response' => 403 )
+            );
+            exit;
+        }
+
         // Allow logged-in admins to do whatever (prevent locking yourself out)
         if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) {
             return;
@@ -63,6 +75,8 @@ class WooSuite_Security {
                 $value_lower = strtolower( urldecode( $value ) );
                 foreach ( $sqli_patterns as $pattern ) {
                     if ( strpos( $value_lower, $pattern ) !== false ) {
+                        // Increase violation count
+                        $this->track_violation( $ip );
                         $this->block_request( 'SQL Injection Attempt', 'high', $simulation_mode );
                         if ( $simulation_mode ) break; // Log once per request in sim mode
                     }
@@ -84,6 +98,7 @@ class WooSuite_Security {
                 $value_lower = strtolower( urldecode( $value ) );
                 foreach ( $xss_patterns as $pattern ) {
                     if ( strpos( $value_lower, $pattern ) !== false ) {
+                        $this->track_violation( $ip );
                         $this->block_request( 'XSS Attempt', 'medium', $simulation_mode );
                         if ( $simulation_mode ) break;
                     }
@@ -93,7 +108,46 @@ class WooSuite_Security {
 
         // 3. Path Traversal (Always check if firewall enabled)
         if ( strpos( $request_uri, '../' ) !== false || strpos( $request_uri, '..\\' ) !== false ) {
+            $this->track_violation( $ip );
             $this->block_request( 'Path Traversal', 'high', $simulation_mode );
+        }
+    }
+
+    /**
+     * Checks if the IP is currently banned.
+     */
+    private function check_ip_reputation( $ip ) {
+        // Check for Ban Transient
+        $ban_transient = 'woosuite_ban_' . md5( $ip );
+        if ( get_transient( $ban_transient ) ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Track violations for IP Reputation logic.
+     * "Three Strikes" (or 5) within a time window leads to a ban.
+     */
+    private function track_violation( $ip ) {
+        $transient_name = 'woosuite_violations_' . md5( $ip );
+        $violations = get_transient( $transient_name );
+
+        if ( false === $violations ) {
+            // First violation, start counter. 10 minute window.
+            set_transient( $transient_name, 1, 10 * 60 );
+        } else {
+            $violations++;
+            set_transient( $transient_name, $violations, 10 * 60 );
+        }
+
+        // Ban Logic: If > 5 violations in 10 mins -> Ban for 30 mins
+        if ( $violations >= 5 ) {
+             $ban_transient = 'woosuite_ban_' . md5( $ip );
+             set_transient( $ban_transient, true, 30 * 60 );
+
+             // Log the ban
+             $this->log_threat( $ip, 'IP Reputation Ban (Too many violations)', 'critical', true );
         }
     }
 
