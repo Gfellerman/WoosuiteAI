@@ -93,9 +93,22 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/seo/batch/stop', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'stop_seo_batch' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/seo/batch-status', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_seo_batch_status' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        // SEO Generate (Single Item) - Server Side
+        register_rest_route( $this->namespace, '/seo/generate/(?P<id>\d+)', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'generate_content_item' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
     }
@@ -130,57 +143,6 @@ class WooSuite_Api {
         $page = $request->get_param('page') ?: 1;
         $filter = $request->get_param('filter'); // 'unoptimized' or empty
 
-        $data = array();
-        $total = 0;
-        $pages = 0;
-
-        // Handle Products (WooCommerce)
-        if ( $type === 'product' && class_exists( 'WooCommerce' ) ) {
-            $args = array(
-                'limit' => $limit,
-                'page' => $page,
-                'paginate' => true,
-                'status' => 'publish',
-            );
-
-            if ( $filter === 'unoptimized' ) {
-                 $args['meta_query'] = array(
-                     'relation' => 'OR',
-                     array(
-                         'key'     => '_woosuite_meta_description',
-                         'compare' => 'NOT EXISTS',
-                     ),
-                     array(
-                         'key'     => '_woosuite_meta_description',
-                         'value'   => '',
-                         'compare' => '=',
-                     )
-                 );
-            }
-
-            $results = wc_get_products( $args );
-
-            $products = $results->products;
-            $total = $results->total;
-            $pages = $results->max_num_pages;
-
-            foreach ( $products as $product ) {
-                $data[] = array(
-                    'id' => $product->get_id(),
-                    'name' => $product->get_name(),
-                    'description' => strip_tags( $product->get_short_description() ?: $product->get_description() ),
-                    'price' => $product->get_price(),
-                    'metaTitle' => get_post_meta( $product->get_id(), '_woosuite_meta_title', true ),
-                    'metaDescription' => get_post_meta( $product->get_id(), '_woosuite_meta_description', true ),
-                    'llmSummary' => get_post_meta( $product->get_id(), '_woosuite_llm_summary', true ),
-                    'type' => 'product',
-                    'permalink' => get_permalink( $product->get_id() )
-                );
-            }
-            return new WP_REST_Response( array( 'items' => $data, 'total' => $total, 'pages' => $pages ), 200 );
-        }
-
-        // Handle Posts, Pages, Images
         $args = array(
             'posts_per_page' => $limit,
             'paged' => $page,
@@ -192,22 +154,24 @@ class WooSuite_Api {
             $args['post_status'] = 'inherit';
             $args['post_mime_type'] = 'image';
         } else {
-            $args['post_type'] = $type; // post, page
+            $args['post_type'] = $type; // post, page, product
         }
 
         if ( $filter === 'unoptimized' ) {
-             $args['meta_query'] = array(
-                 'relation' => 'OR',
-                 array(
-                     'key'     => '_woosuite_meta_description',
-                     'compare' => 'NOT EXISTS',
-                 ),
-                 array(
-                     'key'     => '_woosuite_meta_description',
-                     'value'   => '',
-                     'compare' => '=',
-                 )
-             );
+            if ( $type === 'image' ) {
+                $args['meta_query'] = array(
+                    'relation' => 'OR',
+                    array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' ),
+                    array( 'key' => '_wp_attachment_image_alt', 'value' => '', 'compare' => '=' )
+                );
+            } else {
+                // Text items
+                $args['meta_query'] = array(
+                    'relation' => 'OR',
+                    array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
+                    array( 'key' => '_woosuite_meta_description', 'value' => '', 'compare' => '=' )
+                );
+            }
         }
 
         $query = new WP_Query( $args );
@@ -215,6 +179,7 @@ class WooSuite_Api {
         $total = $query->found_posts;
         $pages = $query->max_num_pages;
 
+        $data = array();
         foreach ( $posts as $post ) {
             $item = array(
                 'id' => $post->ID,
@@ -236,6 +201,11 @@ class WooSuite_Api {
                 if ( empty( $item['description'] ) ) {
                     $item['description'] = $post->post_excerpt;
                 }
+            } elseif ( $type === 'product' && function_exists( 'wc_get_product' ) ) {
+                 $product = wc_get_product( $post->ID );
+                 if ( $product ) {
+                     $item['price'] = $product->get_price();
+                 }
             }
 
             $data[] = $item;
@@ -247,10 +217,6 @@ class WooSuite_Api {
     public function update_content_item( $request ) {
         $id = $request->get_param( 'id' );
         $params = $request->get_json_params();
-
-        // Debug Log
-        error_log( "WooSuite AI: Update Content Item ID: $id" );
-        error_log( "WooSuite AI: Params: " . print_r( $params, true ) );
 
         // Validate content exists
         $post = get_post( $id );
@@ -288,6 +254,40 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function generate_content_item( $request ) {
+        $id = $request->get_param( 'id' );
+        $params = $request->get_json_params();
+        $rewrite_title = isset( $params['rewriteTitle'] ) ? $params['rewriteTitle'] : false;
+
+        $post = get_post( $id );
+        if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
+
+        $gemini = new WooSuite_Gemini();
+
+        if ( $post->post_type === 'attachment' ) {
+            $url = wp_get_attachment_url( $id );
+            $result = $gemini->generate_image_seo( $url, basename( $url ) );
+        } else {
+             $item = array(
+                'type' => $post->post_type,
+                'name' => $post->post_title,
+                'description' => strip_tags( $post->post_excerpt ?: $post->post_content ),
+                'rewrite_title' => $rewrite_title
+            );
+             if ( $post->post_type === 'product' && function_exists( 'wc_get_product' ) ) {
+                $product = wc_get_product( $post->ID );
+                if ( $product ) $item['price'] = $product->get_price();
+            }
+            $result = $gemini->generate_seo_meta( $item );
+        }
+
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'data' => $result ), 200 );
     }
 
     public function get_stats( $request ) {
@@ -399,12 +399,21 @@ class WooSuite_Api {
     // --- SEO Batch ---
 
     public function start_seo_batch( $request ) {
+        $params = $request->get_json_params();
+        $rewrite = isset( $params['rewriteTitles'] ) && $params['rewriteTitles'] ? 'yes' : 'no';
+        update_option( 'woosuite_seo_rewrite_titles', $rewrite );
+
         if ( ! class_exists( 'WooSuite_Seo_Worker' ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );
         }
         $worker = new WooSuite_Seo_Worker();
         $worker->start_batch();
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch started' ), 200 );
+    }
+
+    public function stop_seo_batch( $request ) {
+        update_option( 'woosuite_seo_batch_stop_signal', true );
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Stopping...' ), 200 );
     }
 
     public function get_seo_batch_status( $request ) {

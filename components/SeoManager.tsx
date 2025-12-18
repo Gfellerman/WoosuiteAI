@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { generateSeoMeta, generateImageSeo } from '../services/geminiService';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -25,6 +24,8 @@ const SeoManager: React.FC = () => {
   // Background Batch (Server Side)
   const [batchStatus, setBatchStatus] = useState<any>(null);
   const [showProcessModal, setShowProcessModal] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [rewriteTitles, setRewriteTitles] = useState(false);
 
   // Sitemap
   const [showSitemapModal, setShowSitemapModal] = useState(false);
@@ -97,16 +98,28 @@ const SeoManager: React.FC = () => {
       try {
           const res = await fetch(`${apiUrl}/seo/batch`, {
               method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ rewriteTitles })
           });
           if (res.ok) {
               await checkBatchStatus();
               setShowProcessModal(true);
-              fetchItems(); // Refresh list potentially
+              setShowStartModal(false);
+              fetchItems();
           }
       } catch (e) {
           console.error("Failed to start batch", e);
       }
+  };
+
+  const stopBackgroundBatch = async () => {
+      if (!apiUrl) return;
+      try {
+          await fetch(`${apiUrl}/seo/batch/stop`, {
+              method: 'POST',
+              headers: { 'X-WP-Nonce': nonce }
+          });
+      } catch (e) { console.error(e); }
   };
 
   const handleTabChange = (tab: ContentType) => {
@@ -119,45 +132,25 @@ const SeoManager: React.FC = () => {
   const handleGenerate = async (item: ContentItem) => {
     setGenerating(item.id);
     try {
-      let result;
-      // Image Handling
-      if (item.type === 'image' && item.imageUrl) {
-          result = await generateImageSeo(item.imageUrl, item.name);
-      } else {
-          // Content Handling
-          result = await generateSeoMeta(item);
+      const res = await fetch(`${apiUrl}/seo/generate/${item.id}`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+           // Only send rewriteTitle if explicitly requested? For now, no implicit rewrite on single item.
+           body: JSON.stringify({})
+      });
+
+      if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+               const updates = mapResultToItem(json.data, item.type);
+               setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...updates } : p));
+          }
       }
-
-      // Save to Backend
-      await saveItem(item, result);
-
-      // Update Local State
-      const updates = mapResultToItem(result, item.type);
-      setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...updates } : p));
     } catch (e) {
       console.error(e);
     } finally {
       setGenerating(null);
     }
-  };
-
-  const saveItem = async (item: ContentItem, data: any) => {
-      const payload: any = {};
-
-      if (item.type === 'image') {
-          if (data.altText) payload.altText = data.altText;
-          if (data.title) payload.title = data.title;
-      } else {
-          if (data.title) payload.metaTitle = data.title;
-          if (data.description) payload.metaDescription = data.description;
-          if (data.llmSummary) payload.llmSummary = data.llmSummary;
-      }
-
-      await fetch(`${apiUrl}/content/${item.id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-          body: JSON.stringify(payload)
-      });
   };
 
   const mapResultToItem = (result: any, type: ContentType) => {
@@ -167,7 +160,6 @@ const SeoManager: React.FC = () => {
       return { metaTitle: result.title, metaDescription: result.description, llmSummary: result.llmSummary };
   };
 
-  // Client-Side Bulk (For Selection)
   const handleClientBulkOptimize = async () => {
       if (selectedIds.length === 0) return;
       setIsClientBulkOptimizing(true);
@@ -204,15 +196,23 @@ const SeoManager: React.FC = () => {
                   <RefreshCw className="animate-spin" />
                   <div>
                       <div className="font-bold">Background Optimization Running</div>
-                      <div className="text-sm opacity-90">WooSuite AI is optimizing your content in the background.</div>
+                      <div className="text-sm opacity-90">WooSuite AI is optimizing {batchStatus.total} items in the background.</div>
                   </div>
               </div>
-              <button
-                onClick={() => setShowProcessModal(true)}
-                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition"
-              >
-                  Show Progress
-              </button>
+              <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowProcessModal(true)}
+                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition"
+                  >
+                      Show Progress
+                  </button>
+                  <button
+                    onClick={stopBackgroundBatch}
+                    className="bg-red-500/80 hover:bg-red-500 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
+                  >
+                      <Ban size={16} /> Stop
+                  </button>
+              </div>
           </div>
       )}
 
@@ -254,21 +254,19 @@ const SeoManager: React.FC = () => {
                     </button>
                 )
             ) : (
-                // Background Bulk (Only for Text Content currently)
-                activeTab !== 'image' && (
-                    <button
-                        onClick={startBackgroundBatch}
-                        disabled={batchStatus?.status === 'running'}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border
-                            ${batchStatus?.status === 'running'
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                                : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                            }`}
-                    >
-                        {batchStatus?.status === 'running' ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
-                        Optimize All Content (Background)
-                    </button>
-                )
+                // Background Bulk Trigger
+                <button
+                    onClick={() => setShowStartModal(true)}
+                    disabled={batchStatus?.status === 'running'}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border
+                        ${batchStatus?.status === 'running'
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        }`}
+                >
+                    {batchStatus?.status === 'running' ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+                    Optimize All Content
+                </button>
             )}
         </div>
       </div>
@@ -472,6 +470,53 @@ const SeoManager: React.FC = () => {
         )}
       </div>
 
+      {/* Start Modal */}
+      {showStartModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                  <h3 className="text-xl font-bold mb-4">Start Optimization</h3>
+                  <div className="space-y-4">
+                      <p className="text-gray-600">
+                          This process will optimize all <strong>{totalItems}</strong> items in the background.
+                          It includes generating meta titles, descriptions, and AI summaries.
+                      </p>
+
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <label className="flex items-start gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rewriteTitles}
+                                onChange={(e) => setRewriteTitles(e.target.checked)}
+                                className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                              />
+                              <div>
+                                  <div className="font-medium text-gray-800">Simplify Product Names</div>
+                                  <div className="text-xs text-gray-500">
+                                      Use AI to rewrite and shorten product titles (Max 6 words).
+                                      <br/><span className="text-red-500 font-semibold">Warning: This overwrites your product titles.</span>
+                                  </div>
+                              </div>
+                          </label>
+                      </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-3">
+                      <button
+                        onClick={() => setShowStartModal(false)}
+                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={startBackgroundBatch}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                      >
+                        <Play size={16} /> Start Batch
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Progress Modal */}
       {showProcessModal && batchStatus && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -509,6 +554,17 @@ const SeoManager: React.FC = () => {
                                <div className="text-xs text-center mt-1 text-gray-400">
                                    Processed {batchStatus.processed} of {batchStatus.total} items
                                </div>
+                           </div>
+                       )}
+
+                       {batchStatus.status === 'running' && (
+                           <div className="flex justify-center mt-2">
+                               <button
+                                    onClick={stopBackgroundBatch}
+                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                               >
+                                   <Ban size={14} /> Stop Process
+                               </button>
                            </div>
                        )}
                    </div>
