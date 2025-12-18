@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2 } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -119,6 +119,20 @@ const SeoManager: React.FC = () => {
               method: 'POST',
               headers: { 'X-WP-Nonce': nonce }
           });
+          // Update status immediately for UI responsiveness
+          setBatchStatus((prev: any) => ({ ...prev, status: 'stopped', message: 'Stopping...' }));
+      } catch (e) { console.error(e); }
+  };
+
+  const resetBackgroundBatch = async () => {
+      if (!apiUrl) return;
+      if (!confirm("Are you sure? This will force the process status to 'idle'. Use this if the process is stuck.")) return;
+      try {
+          await fetch(`${apiUrl}/seo/batch/reset`, {
+              method: 'POST',
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          checkBatchStatus();
       } catch (e) { console.error(e); }
   };
 
@@ -214,6 +228,16 @@ const SeoManager: React.FC = () => {
                   </button>
               </div>
           </div>
+      )}
+
+      {/* Force Reset Banner (If stuck or stopped) */}
+      {batchStatus?.status !== 'idle' && batchStatus?.status !== 'running' && (
+           <div className="bg-gray-100 rounded-lg p-3 flex justify-between items-center text-sm text-gray-600">
+               <span>Process status: <strong>{batchStatus?.status}</strong></span>
+               <button onClick={resetBackgroundBatch} className="text-red-600 hover:underline text-xs">
+                   Force Reset Status
+               </button>
+           </div>
       )}
 
       {/* Header & Controls */}
@@ -558,12 +582,18 @@ const SeoManager: React.FC = () => {
                        )}
 
                        {batchStatus.status === 'running' && (
-                           <div className="flex justify-center mt-2">
+                           <div className="flex justify-center gap-2 mt-4">
                                <button
                                     onClick={stopBackgroundBatch}
                                     className="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
                                >
-                                   <Ban size={14} /> Stop Process
+                                   <Ban size={14} /> Stop
+                               </button>
+                               <button
+                                    onClick={resetBackgroundBatch}
+                                    className="bg-gray-50 text-gray-600 hover:bg-gray-100 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                               >
+                                   <Trash2 size={14} /> Force Reset
                                </button>
                            </div>
                        )}
