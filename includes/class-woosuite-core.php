@@ -43,6 +43,9 @@ class WooSuite_Core {
 
         // Load Security Scanner
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-security-scanner.php';
+
+        // Load Security Quarantine
+        require_once WOOSUITE_AI_PATH . 'includes/security/class-woosuite-security-quarantine.php';
 	}
 
     private function define_sitemap_hooks() {

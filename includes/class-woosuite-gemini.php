@@ -79,15 +79,21 @@ class WooSuite_Gemini {
         }
 
         $image_data = wp_remote_retrieve_body( $image_response );
+        if ( empty( $image_data ) ) {
+            return new WP_Error( 'image_empty', 'Image data is empty.' );
+        }
+
         $base64_data = base64_encode( $image_data );
         $mime_type = wp_remote_retrieve_header( $image_response, 'content-type' ) ?: 'image/jpeg';
 
         $prompt = "
-            Analyze this image and generate SEO metadata.
-            Filename context: $filename
+            Analyze the visual content of this image to generate SEO metadata.
 
-            1. Alt Text: Descriptive, accessible, under 125 chars.
-            2. Title: Short, catchy title for the image file.
+            Context (Filename): $filename
+
+            Instructions:
+            1. Alt Text: Describe exactly what is visible in the image. Be specific and accessible. Max 125 chars.
+            2. Title: Create a clean, descriptive title for the image. Do NOT use the filename. Do NOT use gibberish. If the filename is random (e.g. 'DSF345.jpg'), ignore it completely and describe the image.
 
             Return strictly JSON.
         ";
@@ -135,7 +141,10 @@ class WooSuite_Gemini {
 
         $code = wp_remote_retrieve_response_code( $response );
         if ( $code !== 200 ) {
-            return new WP_Error( 'api_error', 'Gemini API Error: ' . wp_remote_retrieve_body( $response ) );
+            $error_msg = wp_remote_retrieve_body( $response );
+            // Log for debugging
+            error_log('WooSuite Gemini Error: ' . $error_msg);
+            return new WP_Error( 'api_error', 'Gemini API Error: ' . $code );
         }
 
         $data = json_decode( wp_remote_retrieve_body( $response ), true );
@@ -145,6 +154,12 @@ class WooSuite_Gemini {
         }
 
         $text = $data['candidates'][0]['content']['parts'][0]['text'];
-        return json_decode( $text, true );
+        $json = json_decode( $text, true );
+
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+             return new WP_Error( 'json_error', 'Invalid JSON from Gemini: ' . $text );
+        }
+
+        return $json;
     }
 }
