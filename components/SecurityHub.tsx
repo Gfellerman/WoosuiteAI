@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SecurityLog } from '../types';
-import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle } from 'lucide-react';
+import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle, Scan, X } from 'lucide-react';
 
 const SecurityHub: React.FC = () => {
   const [firewallEnabled, setFirewallEnabled] = useState(true);
@@ -12,10 +12,16 @@ const SecurityHub: React.FC = () => {
   const [simulationMode, setSimulationMode] = useState(false);
 
   const [loginEnabled, setLoginEnabled] = useState(true);
+  const [loginMaxRetries, setLoginMaxRetries] = useState(3);
+
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [lastScan, setLastScan] = useState<string>('Never');
   const [lastScanSource, setLastScanSource] = useState<string>('auto');
+
+  // Deep Scan State
+  const [showDeepScanModal, setShowDeepScanModal] = useState(false);
+  const [deepScanStatus, setDeepScanStatus] = useState<any>(null);
 
   const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
 
@@ -23,7 +29,17 @@ const SecurityHub: React.FC = () => {
     if (!apiUrl) return;
     fetchStatus();
     fetchLogs();
+    fetchDeepScanStatus();
   }, [apiUrl]);
+
+  // Poll Deep Scan if running
+  useEffect(() => {
+    let interval: any;
+    if (deepScanStatus?.status === 'running') {
+        interval = setInterval(fetchDeepScanStatus, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [deepScanStatus?.status]);
 
   const fetchStatus = async () => {
     try {
@@ -41,6 +57,8 @@ const SecurityHub: React.FC = () => {
             setSimulationMode(data.simulation_mode);
 
             setLoginEnabled(data.login_enabled);
+            setLoginMaxRetries(data.login_max_retries || 3);
+
             setLastScan(data.last_scan);
             setLastScanSource(data.last_scan_source || 'auto');
         }
@@ -63,6 +81,20 @@ const SecurityHub: React.FC = () => {
     }
   };
 
+  const fetchDeepScanStatus = async () => {
+    try {
+        const res = await fetch(`${apiUrl}/security/deep-scan/status`, {
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            setDeepScanStatus(data);
+        }
+    } catch (e) {
+        console.error("Failed to fetch deep scan status", e);
+    }
+  };
+
   const handleToggle = async (option: string, value: boolean) => {
       // Optimistic update
       if (option === 'firewall') setFirewallEnabled(value);
@@ -70,6 +102,7 @@ const SecurityHub: React.FC = () => {
       if (option === 'block_sqli') setBlockSqli(value);
       if (option === 'block_xss') setBlockXss(value);
       if (option === 'simulation_mode') setSimulationMode(value);
+      if (option === 'login') setLoginEnabled(value);
 
       try {
           await fetch(`${apiUrl}/security/toggle`, {
@@ -81,12 +114,24 @@ const SecurityHub: React.FC = () => {
               body: JSON.stringify({ option, value })
           });
 
-          // Refresh status to ensure consistency (e.g., side effects)
           fetchStatus();
       } catch (e) {
           console.error("Failed to toggle option", e);
           fetchStatus(); // Revert on error
       }
+  };
+
+  const saveLoginSettings = async (retries: number) => {
+    setLoginMaxRetries(retries);
+    try {
+        await fetch(`${apiUrl}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify({ loginMaxRetries: retries })
+        });
+    } catch (e) {
+        console.error("Failed to save login settings", e);
+    }
   };
 
   const handleScan = async () => {
@@ -99,13 +144,28 @@ const SecurityHub: React.FC = () => {
         if (res.ok) {
             const result = await res.json();
             console.log("Scan result:", result);
-            // Refresh status to get new last scan time
             fetchStatus();
         }
     } catch (e) {
         console.error("Scan failed", e);
     } finally {
         setScanning(false);
+    }
+  };
+
+  const startDeepScan = async () => {
+    setShowDeepScanModal(false);
+    setDeepScanStatus({ status: 'running', message: 'Starting...', processed_folders: 0, total_folders: 1 }); // Optimistic
+    try {
+        await fetch(`${apiUrl}/security/deep-scan/start`, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        // The worker starts in background. We poll status.
+        fetchDeepScanStatus();
+    } catch (e) {
+        console.error("Deep scan failed to start", e);
+        setDeepScanStatus({ status: 'error', message: 'Failed to start scan.' });
     }
   };
 
@@ -125,6 +185,14 @@ const SecurityHub: React.FC = () => {
             >
                 <ShieldAlert size={18} /> Test Firewall
             </a>
+
+            <button
+                onClick={() => setShowDeepScanModal(true)}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition flex items-center gap-2 shadow-sm"
+            >
+                <Scan size={18} /> Deep Scan
+            </button>
+
             <div className="flex flex-col items-end gap-1">
                 <button
                     onClick={handleScan}
@@ -133,12 +201,42 @@ const SecurityHub: React.FC = () => {
                     title="Runs a Core Integrity Check (Quick Scan)"
                 >
                     {scanning ? <Activity className="animate-spin" size={18} /> : <FileSearch size={18} />}
-                    {scanning ? 'Scanning Files...' : 'Run Quick Scan'}
+                    {scanning ? 'Scanning...' : 'Run Quick Scan'}
                 </button>
-                <span className="text-[10px] text-gray-400 font-medium">Core Integrity Only</span>
+                <span className="text-[10px] text-gray-400 font-medium">Auto-scan every 12h</span>
             </div>
         </div>
       </div>
+
+      {/* Deep Scan Modal */}
+      {showDeepScanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl scale-100 transform transition-all">
+                <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                    <AlertTriangle className="text-amber-500" /> Deep Malware Scan
+                </h3>
+                <p className="text-gray-600 mb-6">
+                    This process will recursively scan all files in your <strong>plugins</strong> and <strong>themes</strong> directories for known malware patterns (e.g., eval, base64_decode, shell_exec).
+                    <br/><br/>
+                    <strong>Warning:</strong> This process is resource-intensive and may temporarily slow down your website.
+                </p>
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={() => setShowDeepScanModal(false)}
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={startDeepScan}
+                        className="px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-lg font-medium shadow-md"
+                    >
+                        Start Scan
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* WAF Card */}
@@ -164,7 +262,7 @@ const SecurityHub: React.FC = () => {
             </div>
           </div>
           <h3 className="font-bold text-gray-800">Anti-Spam</h3>
-          <p className="text-xs text-gray-500 mt-1">{spamProtection ? 'Filtering Bots' : 'Disabled'}</p>
+          <p className="text-xs text-gray-500 mt-1">{spamProtection ? 'Honeypot + Link Filter' : 'Disabled'}</p>
         </div>
 
         {/* Malware Card */}
@@ -176,28 +274,84 @@ const SecurityHub: React.FC = () => {
           <h3 className="font-bold text-gray-800">File Integrity</h3>
           <div className="mt-1">
              <p className="text-xs text-gray-500">Last scan: {lastScan}</p>
-             {lastScan !== 'Never' && (
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mt-0.5">
-                    Trigger: {lastScanSource === 'manual' ? 'Manual' : 'Auto (12h)'}
-                </p>
-             )}
+             <p className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mt-0.5">
+                Next Auto-Scan: 12h
+             </p>
           </div>
         </div>
 
         {/* Login Security Card */}
-        <div className={`p-5 rounded-xl border transition-all ${loginEnabled ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+        <div className={`p-5 rounded-xl border transition-all cursor-pointer ${loginEnabled ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}
+             onClick={() => handleToggle('login', !loginEnabled)}>
           <div className="flex justify-between items-start mb-2">
              <KeyRound size={24} className={loginEnabled ? 'text-amber-600' : 'text-gray-400'} />
-             <span className={`text-xs px-2 py-0.5 rounded-full ${loginEnabled ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-               {loginEnabled ? 'Active' : 'Disabled'}
-             </span>
+             <div className={`w-10 h-5 rounded-full p-1 transition-colors ${loginEnabled ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <div className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${loginEnabled ? 'translate-x-5' : ''}`} />
+            </div>
           </div>
           <h3 className="font-bold text-gray-800">Login Security</h3>
-          <p className="text-xs text-gray-500 mt-1">Limit: 3 attempts • 15min Lockout</p>
+          <p className="text-xs text-gray-500 mt-1">{loginEnabled ? `Limit: ${loginMaxRetries} attempts` : 'Disabled'}</p>
         </div>
       </div>
 
-      {/* Detailed Configuration Panel */}
+      {/* Deep Scan Progress/Results */}
+      {deepScanStatus && deepScanStatus.status !== 'idle' && (
+         <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-6 animate-in fade-in slide-in-from-top-4">
+            <div className="flex justify-between items-center mb-4">
+                 <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Scan size={20} className="text-purple-600"/> Deep Scan Status
+                </h3>
+                <span className={`px-2 py-1 rounded text-xs font-medium uppercase ${deepScanStatus.status === 'running' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                    {deepScanStatus.status}
+                </span>
+            </div>
+
+            <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>{deepScanStatus.message}</span>
+                    <span>{deepScanStatus.processed_folders} / {deepScanStatus.total_folders} Folders</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
+                        style={{ width: `${deepScanStatus.total_folders > 0 ? (deepScanStatus.processed_folders / deepScanStatus.total_folders) * 100 : 0}%` }}
+                    ></div>
+                </div>
+            </div>
+
+            {deepScanStatus.results && deepScanStatus.results.length > 0 && (
+                <div className="mt-6">
+                    <h4 className="font-medium text-red-600 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> Suspicious Files Found</h4>
+                    <div className="bg-red-50 border border-red-100 rounded-lg overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                             <thead className="bg-red-100/50 text-red-800">
+                                <tr>
+                                    <th className="p-3">File</th>
+                                    <th className="p-3">Issue</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-red-100">
+                                {deepScanStatus.results.map((res: any, idx: number) => (
+                                    <tr key={idx}>
+                                        <td className="p-3 font-mono text-xs text-gray-700 break-all">{res.file}</td>
+                                        <td className="p-3 text-red-700 text-xs font-bold">{res.issue}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {deepScanStatus.status === 'complete' && (!deepScanStatus.results || deepScanStatus.results.length === 0) && (
+                <p className="text-green-600 font-medium text-sm flex items-center gap-2">
+                    <Shield size={16}/> No malware patterns found. Your site appears clean.
+                </p>
+            )}
+         </div>
+      )}
+
+      {/* Firewall Configuration Panel */}
       {firewallEnabled && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex justify-between items-center mb-6">
@@ -252,6 +406,33 @@ const SecurityHub: React.FC = () => {
                     </div>
                 </div>
             )}
+        </div>
+      )}
+
+      {/* Login Configuration Panel */}
+      {loginEnabled && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-in fade-in slide-in-from-top-4 duration-300">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <KeyRound size={20} className="text-amber-600"/> Login Security Configuration
+                </h3>
+            </div>
+            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-800">Max Login Retries</label>
+                    <p className="text-xs text-gray-500">Number of failed attempts allowed before a 15-minute lockout.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="number"
+                        min="1" max="10"
+                        value={loginMaxRetries}
+                        onChange={(e) => saveLoginSettings(parseInt(e.target.value))}
+                        className="w-20 p-2 border border-gray-300 rounded-lg text-center font-bold text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    />
+                    <span className="text-sm text-gray-500">attempts</span>
+                </div>
+            </div>
         </div>
       )}
 

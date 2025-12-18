@@ -74,6 +74,18 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/security/deep-scan/start', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'start_deep_scan' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/deep-scan/status', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_deep_scan_status' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
             'methods' => 'POST',
@@ -100,6 +112,9 @@ class WooSuite_Api {
         $params = $request->get_json_params();
         if ( isset( $params['apiKey'] ) ) {
             update_option( 'woosuite_gemini_api_key', sanitize_text_field( $params['apiKey'] ) );
+        }
+        if ( isset( $params['loginMaxRetries'] ) ) {
+            update_option( 'woosuite_login_max_retries', (int) $params['loginMaxRetries'] );
         }
         return new WP_REST_Response( array( 'success' => true ), 200 );
     }
@@ -129,11 +144,16 @@ class WooSuite_Api {
             );
 
             if ( $filter === 'unoptimized' ) {
-                 // WC doesn't make it easy to query by "meta key NOT exists" in standard args easily without meta_query
                  $args['meta_query'] = array(
+                     'relation' => 'OR',
                      array(
                          'key'     => '_woosuite_meta_description',
                          'compare' => 'NOT EXISTS',
+                     ),
+                     array(
+                         'key'     => '_woosuite_meta_description',
+                         'value'   => '',
+                         'compare' => '=',
                      )
                  );
             }
@@ -177,9 +197,15 @@ class WooSuite_Api {
 
         if ( $filter === 'unoptimized' ) {
              $args['meta_query'] = array(
+                 'relation' => 'OR',
                  array(
                      'key'     => '_woosuite_meta_description',
                      'compare' => 'NOT EXISTS',
+                 ),
+                 array(
+                     'key'     => '_woosuite_meta_description',
+                     'value'   => '',
+                     'compare' => '=',
                  )
              );
         }
@@ -313,7 +339,8 @@ class WooSuite_Api {
             'block_sqli' => get_option( 'woosuite_firewall_block_sqli', 'yes' ) === 'yes',
             'block_xss' => get_option( 'woosuite_firewall_block_xss', 'yes' ) === 'yes',
             'simulation_mode' => get_option( 'woosuite_firewall_simulation_mode', 'no' ) === 'yes',
-            'login_enabled' => true, // Currently always active
+            'login_enabled' => get_option( 'woosuite_login_protection_enabled', 'yes' ) === 'yes',
+            'login_max_retries' => (int) get_option( 'woosuite_login_max_retries', 3 ),
             'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
             'last_scan_source' => get_option( 'woosuite_last_scan_source', 'auto' ),
             'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
@@ -338,6 +365,8 @@ class WooSuite_Api {
             update_option( 'woosuite_firewall_block_xss', $value_str );
         } elseif ( $option === 'simulation_mode' ) {
             update_option( 'woosuite_firewall_simulation_mode', $value_str );
+        } elseif ( $option === 'login' ) {
+            update_option( 'woosuite_login_protection_enabled', $value_str );
         } else {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid option' ), 400 );
         }
@@ -349,6 +378,22 @@ class WooSuite_Api {
         $security = new WooSuite_Security( $this->plugin_name, $this->version );
         $result = $security->perform_core_scan( 'manual' );
         return new WP_REST_Response( $result, 200 );
+    }
+
+    public function start_deep_scan( $request ) {
+        if ( ! class_exists( 'WooSuite_Security_Scanner' ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Scanner class not found' ), 500 );
+        }
+        $scanner = new WooSuite_Security_Scanner();
+        $count = $scanner->start_scan();
+        return new WP_REST_Response( array( 'success' => true, 'count' => $count ), 200 );
+    }
+
+    public function get_deep_scan_status( $request ) {
+        $status = get_option( 'woosuite_security_scan_status', array( 'status' => 'idle' ) );
+        $results = get_option( 'woosuite_security_scan_results', array() );
+        $status['results'] = $results;
+        return new WP_REST_Response( $status, 200 );
     }
 
     // --- SEO Batch ---

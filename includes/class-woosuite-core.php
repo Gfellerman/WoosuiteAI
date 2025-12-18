@@ -40,6 +40,9 @@ class WooSuite_Core {
         // Load Gemini & SEO Worker
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-gemini.php';
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-seo-worker.php';
+
+        // Load Security Scanner
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-security-scanner.php';
 	}
 
     private function define_sitemap_hooks() {
@@ -77,5 +80,8 @@ class WooSuite_Core {
 
         // Initialize SEO Worker (Listener)
         new WooSuite_Seo_Worker();
+
+        // Initialize Security Scanner (Listener)
+        new WooSuite_Security_Scanner();
 	}
 }

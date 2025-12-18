@@ -5,29 +5,25 @@ WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one Word
 
 ## Current Status
 *   **Architecture:** Hybrid (React Dashboard + PHP REST API).
-*   **Branding:** Updated Author to "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
-*   **Security Module:** Fully implemented (WAF, Scanner, Login Protection, Logs).
-    *   **New Features:** Granular Blocking Controls (SQLi/XSS) and Simulation Mode.
-    *   **Verification:** Added "Test Firewall" button to verify WAF efficacy against XSS/SQLi.
+*   **Branding:** Author "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
+*   **Security Module:** Fully implemented & Enhanced.
+    *   **Firewall:** WAF with SQLi/XSS blocking, Simulation Mode, and IP Reputation.
+    *   **Deep Scan:** Background process scanning `wp-content/plugins` and `themes` for malware patterns (`eval`, `shell_exec`, etc.).
+    *   **Login Protection:** Configurable max retries (default 3) and lockout.
+    *   **Spam Protection:** Honeypot field and Link Limiter for comments.
+    *   **UI:** Added Deep Scan Modal, Progress bar, and granular configuration panels.
 *   **SEO Module:** Fully Functional & Verified.
-    *   **Scope:** Supports Products, Posts, Pages, and Images.
-    *   **Features:** Bulk Optimization, Image Analysis, Custom Sitemap.
-    *   **Verification:** Added "Verify Meta Tags" (via metatags.io) and "View Image" buttons to UI.
-    *   **Fixes:** Resolved data persistence issues with robust error handling and logging.
+    *   **Scope:** Products, Posts, Pages, and Images.
+    *   **Batching:** Background worker for bulk optimization.
+    *   **Fixes:** Resolved "Unoptimized" filter logic in API.
 *   **Dashboard:** Fully functional Security and SEO tabs.
 
 ## Recent Changes
-- [x] **Security:** Added Granular Blocking Options (SQLi, XSS) and Simulation Mode to Backend and Frontend.
-- [x] **Bug Fix:** Fixed "Blank Screen" by injecting `type="module"` for Vite-built assets.
-- [x] **Verification:** Added `tests/test_waf_simulation.php` to verify firewall logic.
-- [x] **Verification Tools:** Added user-facing tools to verify Security (Test WAF) and SEO (Inspect Live).
-- [x] **Branding:** Updated `woosuite-ai.php` author details.
-- [x] **SEO Persistence:** Enhanced `SeoManager.tsx` to trap and report save errors; added debug logging to `class-woosuite-api.php`.
-- [x] **Bug Fixes:**
-    - Moved WAF hook to `init` to prevent fatal errors.
-    - Fixed Sitemap URL display.
-    - Corrected Image permalink logic.
-- [x] **Build:** Re-compiled frontend assets.
+- [x] **SEO Fix:** Fixed API logic to correctly filter unoptimized items using robust `meta_query`.
+- [x] **Security Deep Scan:** Implemented `WooSuite_Security_Scanner` (Background Process) and Frontend UI with Progress/Results.
+- [x] **Security Enhancements:** Added Honeypot (Spam) and Configurable Login Protection (Max Retries).
+- [x] **UI Updates:** Added "Deep Scan" modal, "Auto-scan every 12h" text, and Login Configuration panel.
+- [x] **Verification:** Verified Security UI with Playwright and screenshot.
 
 ## Todo List (Next Priorities)
 1.  **Order Manager:** Implement real logic for Order Management features.
