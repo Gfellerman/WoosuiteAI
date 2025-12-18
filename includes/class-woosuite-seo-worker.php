@@ -42,8 +42,8 @@ class WooSuite_Seo_Worker {
         $start_time = microtime( true );
         $rewrite_titles = get_option( 'woosuite_seo_rewrite_titles', 'no' ) === 'yes';
 
-        // Time-based loop (20 seconds max)
-        while ( ( microtime( true ) - $start_time ) < 20 ) {
+        // Reduced time limit for stability on shared hosting (15s instead of 20s)
+        while ( ( microtime( true ) - $start_time ) < 15 ) {
 
             // Double check stop signal inside loop
             if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) break;
@@ -61,13 +61,22 @@ class WooSuite_Seo_Worker {
             $id = $ids[0];
             $post = get_post( $id );
 
-            if ( ! $post ) continue;
+            if ( ! $post ) {
+                 // Should not happen if query works, but safe fallback
+                 update_post_meta( $id, '_woosuite_seo_failed', 1 );
+                 continue;
+            }
 
             // Process Item
-            if ( $post->post_type === 'attachment' ) {
-                $this->process_image( $post );
-            } else {
-                $this->process_text( $post, $rewrite_titles );
+            try {
+                if ( $post->post_type === 'attachment' ) {
+                    $this->process_image( $post );
+                } else {
+                    $this->process_text( $post, $rewrite_titles );
+                }
+            } catch ( Exception $e ) {
+                update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+                error_log( "WooSuite SEO Worker Exception: " . $e->getMessage() );
             }
 
             $status['processed']++;
@@ -93,18 +102,23 @@ class WooSuite_Seo_Worker {
 
         $result = $this->gemini->generate_seo_meta( $item );
 
-        if ( is_wp_error( $result ) ) {
+        if ( is_wp_error( $result ) || empty( $result ) ) {
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
             return;
         }
 
         // Save
-        if ( ! empty( $result['title'] ) ) update_post_meta( $post->ID, '_woosuite_meta_title', sanitize_text_field( $result['title'] ) );
+        $saved = false;
+        if ( ! empty( $result['title'] ) ) {
+            update_post_meta( $post->ID, '_woosuite_meta_title', sanitize_text_field( $result['title'] ) );
+            $saved = true;
+        }
         if ( ! empty( $result['description'] ) ) {
             $desc = sanitize_text_field( $result['description'] );
             update_post_meta( $post->ID, '_woosuite_meta_description', $desc );
             update_post_meta( $post->ID, '_yoast_wpseo_metadesc', $desc );
             update_post_meta( $post->ID, 'rank_math_description', $desc );
+            $saved = true;
         }
         if ( ! empty( $result['llmSummary'] ) ) update_post_meta( $post->ID, '_woosuite_llm_summary', sanitize_textarea_field( $result['llmSummary'] ) );
 
@@ -114,6 +128,11 @@ class WooSuite_Seo_Worker {
                 'ID' => $post->ID,
                 'post_title' => sanitize_text_field( $result['simplifiedTitle'] )
             ) );
+        }
+
+        // Anti-Loop Protection: If nothing was saved, mark as failed to prevent infinite retry
+        if ( ! $saved ) {
+             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
         }
     }
 
@@ -126,18 +145,28 @@ class WooSuite_Seo_Worker {
 
         $result = $this->gemini->generate_image_seo( $url, basename( $url ) );
 
-        if ( is_wp_error( $result ) ) {
+        if ( is_wp_error( $result ) || empty( $result ) ) {
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
             return;
         }
 
-        if ( ! empty( $result['altText'] ) ) update_post_meta( $post->ID, '_wp_attachment_image_alt', sanitize_text_field( $result['altText'] ) );
+        $saved = false;
+        if ( ! empty( $result['altText'] ) ) {
+            update_post_meta( $post->ID, '_wp_attachment_image_alt', sanitize_text_field( $result['altText'] ) );
+            $saved = true;
+        }
         if ( ! empty( $result['title'] ) ) {
             // Update attachment title
             wp_update_post( array(
                 'ID' => $post->ID,
                 'post_title' => sanitize_text_field( $result['title'] )
             ) );
+            $saved = true;
+        }
+
+        // Anti-Loop Protection
+        if ( ! $saved ) {
+            update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
         }
     }
 
