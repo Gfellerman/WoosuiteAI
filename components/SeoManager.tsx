@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
 import { generateSeoMeta, generateImageSeo } from '../services/geminiService';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -14,28 +14,64 @@ const SeoManager: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Bulk Optimization
+  // Filters
+  const [showUnoptimized, setShowUnoptimized] = useState(false);
+
+  // Bulk Optimization (Client Side - Selection)
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [selectAllServer, setSelectAllServer] = useState(false);
-  const [isBulkOptimizing, setIsBulkOptimizing] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [isClientBulkOptimizing, setIsClientBulkOptimizing] = useState(false);
+  const [clientBulkProgress, setClientBulkProgress] = useState({ current: 0, total: 0 });
+
+  // Background Batch (Server Side)
+  const [batchStatus, setBatchStatus] = useState<any>(null);
+  const [showProcessModal, setShowProcessModal] = useState(false);
 
   // Sitemap
   const [showSitemapModal, setShowSitemapModal] = useState(false);
-  // Default to true as per plan, but in real app fetch from settings
-  const [sitemapEnabled, setSitemapEnabled] = useState(true);
 
-  const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
+  const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
+
+  // Initial Poll Check
+  useEffect(() => {
+      checkBatchStatus();
+  }, []);
+
+  // Poll when running
+  useEffect(() => {
+      let interval: any;
+      if (batchStatus?.status === 'running') {
+          interval = setInterval(checkBatchStatus, 3000);
+      }
+      return () => clearInterval(interval);
+  }, [batchStatus?.status]);
 
   useEffect(() => {
     fetchItems();
-  }, [activeTab, page]);
+  }, [activeTab, page, showUnoptimized]);
+
+  const checkBatchStatus = async () => {
+      if (!apiUrl) return;
+      try {
+          const res = await fetch(`${apiUrl}/seo/batch-status`, {
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              const data = await res.json();
+              setBatchStatus(data);
+          }
+      } catch (e) { console.error(e); }
+  };
 
   const fetchItems = async () => {
     if (!apiUrl) return;
     setLoading(true);
     try {
-        const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=20&page=${page}`, {
+        let url = `${apiUrl}/content?type=${activeTab}&limit=20&page=${page}`;
+        if (showUnoptimized) {
+            url += '&filter=unoptimized';
+        }
+
+        const res = await fetch(url, {
             headers: { 'X-WP-Nonce': nonce }
         });
         if (res.ok) {
@@ -56,10 +92,28 @@ const SeoManager: React.FC = () => {
     }
   };
 
+  const startBackgroundBatch = async () => {
+      if (!apiUrl) return;
+      try {
+          const res = await fetch(`${apiUrl}/seo/batch`, {
+              method: 'POST',
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              await checkBatchStatus();
+              setShowProcessModal(true);
+              fetchItems(); // Refresh list potentially
+          }
+      } catch (e) {
+          console.error("Failed to start batch", e);
+      }
+  };
+
   const handleTabChange = (tab: ContentType) => {
       if (tab === activeTab) return;
       setActiveTab(tab);
       setPage(1);
+      setSelectedIds([]);
   };
 
   const handleGenerate = async (item: ContentItem) => {
@@ -88,7 +142,6 @@ const SeoManager: React.FC = () => {
   };
 
   const saveItem = async (item: ContentItem, data: any) => {
-      // Map data to API params
       const payload: any = {};
 
       if (item.type === 'image') {
@@ -109,16 +162,16 @@ const SeoManager: React.FC = () => {
 
   const mapResultToItem = (result: any, type: ContentType) => {
       if (type === 'image') {
-          return { altText: result.altText, name: result.title }; // Note: name maps to post_title
+          return { altText: result.altText, name: result.title };
       }
       return { metaTitle: result.title, metaDescription: result.description, llmSummary: result.llmSummary };
   };
 
-  // Bulk Logic
-  const handleBulkOptimize = async () => {
+  // Client-Side Bulk (For Selection)
+  const handleClientBulkOptimize = async () => {
       if (selectedIds.length === 0) return;
-      setIsBulkOptimizing(true);
-      setBulkProgress({ current: 0, total: selectedIds.length });
+      setIsClientBulkOptimizing(true);
+      setClientBulkProgress({ current: 0, total: selectedIds.length });
 
       for (let i = 0; i < selectedIds.length; i++) {
           const id = selectedIds[i];
@@ -126,68 +179,43 @@ const SeoManager: React.FC = () => {
           if (item) {
               await handleGenerate(item);
           }
-          setBulkProgress(prev => ({ ...prev, current: i + 1 }));
+          setClientBulkProgress(prev => ({ ...prev, current: i + 1 }));
       }
 
-      setIsBulkOptimizing(false);
-      setSelectedIds([]); // Clear selection
-  };
-
-  const handleBulkOptimizeAll = async () => {
-      setIsBulkOptimizing(true);
-      setBulkProgress({ current: 0, total: totalItems });
-
-      let processedCount = 0;
-
-      // Iterate all pages
-      for (let p = 1; p <= totalPages; p++) {
-          try {
-              // Fetch page p
-              const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=20&page=${p}`, {
-                    headers: { 'X-WP-Nonce': nonce }
-              });
-              if (!res.ok) continue;
-
-              const data = await res.json();
-              // Handle both response structures (array or object with items)
-              const pageItems = data.items || data;
-
-              if (Array.isArray(pageItems)) {
-                  for (const item of pageItems) {
-                      await handleGenerate(item);
-                      processedCount++;
-                      setBulkProgress(prev => ({ ...prev, current: processedCount }));
-                  }
-              }
-          } catch (e) {
-              console.error(`Failed to process page ${p}`, e);
-          }
-      }
-
-      setIsBulkOptimizing(false);
-      setSelectAllServer(false);
+      setIsClientBulkOptimizing(false);
       setSelectedIds([]);
-      fetchItems(); // Refresh current view
   };
 
-  const toggleSelectAll = () => {
-      if (selectAllServer) {
-          setSelectAllServer(false);
-          setSelectedIds([]);
-      } else if (selectedIds.length === items.length) {
+  const toggleSelectAllPage = () => {
+      if (selectedIds.length === items.length) {
           setSelectedIds([]);
       } else {
           setSelectedIds(items.map(i => i.id));
       }
   };
 
-  const handleSelectAllServer = () => {
-      setSelectAllServer(true);
-      setSelectedIds(items.map(i => i.id)); // Visual consistency
-  };
-
   return (
     <div className="space-y-6">
+
+      {/* Background Process Banner */}
+      {batchStatus?.status === 'running' && (
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg p-4 text-white shadow-md flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                  <RefreshCw className="animate-spin" />
+                  <div>
+                      <div className="font-bold">Background Optimization Running</div>
+                      <div className="text-sm opacity-90">WooSuite AI is optimizing your content in the background.</div>
+                  </div>
+              </div>
+              <button
+                onClick={() => setShowProcessModal(true)}
+                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition"
+              >
+                  Show Progress
+              </button>
+          </div>
+      )}
+
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -206,81 +234,97 @@ const SeoManager: React.FC = () => {
                 rel="noopener noreferrer"
                 className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2 text-gray-700"
             >
-                <FileText size={16} /> View llms.txt
+                <FileText size={16} /> llms.txt
             </a>
-            {isBulkOptimizing ? (
-                 <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                     <RefreshCw size={16} className="animate-spin" />
-                     Processing {bulkProgress.current}/{bulkProgress.total}
-                 </div>
+
+            {/* Action Buttons */}
+            {selectedIds.length > 0 ? (
+                // Client Side Bulk
+                isClientBulkOptimizing ? (
+                    <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <RefreshCw size={16} className="animate-spin" />
+                        Processing {clientBulkProgress.current}/{clientBulkProgress.total}
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleClientBulkOptimize}
+                        className="px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 bg-purple-600 text-white hover:bg-purple-700"
+                    >
+                        <Sparkles size={16} /> Optimize Selected ({selectedIds.length})
+                    </button>
+                )
             ) : (
-                <button
-                    onClick={selectAllServer ? handleBulkOptimizeAll : handleBulkOptimize}
-                    disabled={selectedIds.length === 0 && !selectAllServer}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2
-                        ${(selectedIds.length === 0 && !selectAllServer) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
-                >
-                    <Sparkles size={16} /> Bulk Optimize ({selectAllServer ? totalItems : selectedIds.length})
-                </button>
+                // Background Bulk (Only for Text Content currently)
+                activeTab !== 'image' && (
+                    <button
+                        onClick={startBackgroundBatch}
+                        disabled={batchStatus?.status === 'running'}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border
+                            ${batchStatus?.status === 'running'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                            }`}
+                    >
+                        {batchStatus?.status === 'running' ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+                        Optimize All Content (Background)
+                    </button>
+                )
             )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 pb-1">
-          {[
-              { id: 'product', label: 'Products', icon: Box },
-              { id: 'post', label: 'Posts', icon: FileText },
-              { id: 'page', label: 'Pages', icon: Layout },
-              { id: 'image', label: 'Images', icon: ImageIcon }
-          ].map(tab => (
+      {/* Tabs & Filters */}
+      <div className="flex flex-col sm:flex-row justify-between items-end border-b border-gray-200 pb-1 gap-4">
+          <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
+            {[
+                { id: 'product', label: 'Products', icon: Box },
+                { id: 'post', label: 'Posts', icon: FileText },
+                { id: 'page', label: 'Pages', icon: Layout },
+                { id: 'image', label: 'Images', icon: ImageIcon }
+            ].map(tab => (
+                <button
+                    key={tab.id}
+                    onClick={() => handleTabChange(tab.id as ContentType)}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition whitespace-nowrap
+                        ${activeTab === tab.id
+                            ? 'bg-white border-b-2 border-purple-600 text-purple-600'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                >
+                    <tab.icon size={16} /> {tab.label}
+                </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 pb-2">
               <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id as ContentType)}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition
-                    ${activeTab === tab.id
-                        ? 'bg-white border-b-2 border-purple-600 text-purple-600'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                onClick={() => setShowUnoptimized(!showUnoptimized)}
+                className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border transition
+                    ${showUnoptimized
+                        ? 'bg-amber-50 border-amber-200 text-amber-700 font-medium'
+                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               >
-                  <tab.icon size={16} /> {tab.label}
+                  <Filter size={14} />
+                  {showUnoptimized ? 'Showing: Unoptimized' : 'Filter: All Items'}
+                  {showUnoptimized && <X size={12} className="ml-1 opacity-60" />}
               </button>
-          ))}
+          </div>
       </div>
 
       {/* Content Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
-            <div className="p-8 text-center text-gray-500">Loading content...</div>
+            <div className="p-12 text-center text-gray-500 flex flex-col items-center gap-3">
+                <Loader className="animate-spin text-purple-500" size={32} />
+                <span>Loading content...</span>
+            </div>
         ) : (
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-100">
-            {selectedIds.length === items.length && items.length > 0 && !selectAllServer && totalItems > items.length && (
-              <tr>
-                <td colSpan={5} className="p-2 bg-purple-50 text-center border-b border-purple-100">
-                    <span className="text-sm text-purple-800">
-                        All {items.length} items on this page are selected.
-                        <button onClick={handleSelectAllServer} className="ml-2 font-bold underline hover:text-purple-900">
-                            Select all {totalItems} items in {activeTab}
-                        </button>
-                    </span>
-                </td>
-              </tr>
-            )}
-            {selectAllServer && (
-              <tr>
-                <td colSpan={5} className="p-2 bg-purple-100 text-center border-b border-purple-200">
-                    <span className="text-sm text-purple-900 font-medium">
-                        All {totalItems} items are selected.
-                        <button onClick={toggleSelectAll} className="ml-2 underline text-purple-700">Clear selection</button>
-                    </span>
-                </td>
-              </tr>
-            )}
             <tr>
               <th className="p-4 w-8">
                   <input type="checkbox"
-                    checked={(items.length > 0 && selectedIds.length === items.length) || selectAllServer}
-                    onChange={toggleSelectAll}
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    onChange={toggleSelectAllPage}
                     className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
               </th>
@@ -358,7 +402,7 @@ const SeoManager: React.FC = () => {
                   <div className="flex flex-col gap-2 items-end">
                     <button
                         onClick={() => handleGenerate(item)}
-                        disabled={generating === item.id || isBulkOptimizing}
+                        disabled={generating === item.id || isClientBulkOptimizing}
                         className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium transition w-full
                             ${generating === item.id
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -379,20 +423,9 @@ const SeoManager: React.FC = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 transition w-full border border-gray-200"
-                        title="Verify Meta Tags (Requires Public URL)"
+                        title="Verify Meta Tags"
                     >
                         <ExternalLink size={14} className="mr-1.5" /> Verify
-                    </a>
-                    )}
-
-                    {activeTab === 'image' && item.permalink && (
-                    <a
-                        href={item.permalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 hover:text-gray-900 transition w-full border border-gray-200"
-                    >
-                        <ExternalLink size={14} className="mr-1.5" /> View
                     </a>
                     )}
                   </div>
@@ -401,8 +434,8 @@ const SeoManager: React.FC = () => {
             ))}
             {items.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-400">
-                        No content found for this type.
+                    <td colSpan={5} className="p-12 text-center text-gray-400">
+                        {showUnoptimized ? 'No unoptimized items found. Good job!' : 'No content found for this type.'}
                     </td>
                 </tr>
             )}
@@ -439,6 +472,59 @@ const SeoManager: React.FC = () => {
         )}
       </div>
 
+      {/* Progress Modal */}
+      {showProcessModal && batchStatus && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                   <div className="flex justify-between items-center mb-4">
+                       <h3 className="text-xl font-bold">Background Optimization</h3>
+                       <button onClick={() => setShowProcessModal(false)} className="text-gray-400 hover:text-gray-600">
+                           <X size={20} />
+                       </button>
+                   </div>
+
+                   <div className="space-y-4">
+                       <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-full ${batchStatus.status === 'running' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
+                                {batchStatus.status === 'running' ? <RefreshCw className="animate-spin" size={24} /> : <Check size={24} />}
+                            </div>
+                            <div>
+                                <div className="font-semibold text-gray-900 capitalize">{batchStatus.status}</div>
+                                <div className="text-sm text-gray-500">{batchStatus.message}</div>
+                            </div>
+                       </div>
+
+                       {batchStatus.total > 0 && (
+                           <div>
+                               <div className="flex justify-between text-sm mb-1">
+                                   <span>Progress</span>
+                                   <span>{Math.round((batchStatus.processed / batchStatus.total) * 100)}%</span>
+                               </div>
+                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                   <div
+                                     className="h-full bg-purple-600 transition-all duration-500 ease-out"
+                                     style={{ width: `${(batchStatus.processed / batchStatus.total) * 100}%` }}
+                                   />
+                               </div>
+                               <div className="text-xs text-center mt-1 text-gray-400">
+                                   Processed {batchStatus.processed} of {batchStatus.total} items
+                               </div>
+                           </div>
+                       )}
+                   </div>
+
+                   <div className="mt-6 flex justify-end">
+                       <button
+                            onClick={() => setShowProcessModal(false)}
+                            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                       >
+                           Close
+                       </button>
+                   </div>
+               </div>
+          </div>
+      )}
+
       {/* Sitemap Modal */}
       {showSitemapModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -447,7 +533,6 @@ const SeoManager: React.FC = () => {
                   <div className="space-y-4">
                       <div className="flex items-center justify-between">
                           <span className="font-medium text-gray-700">Enable Custom Sitemap</span>
-                          {/* Toggle Display - Since we defaulted to Enabled in backend, just showing Enabled */}
                           <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">Active</div>
                       </div>
                       <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-sm text-gray-600 font-mono">

@@ -36,6 +36,10 @@ class WooSuite_Core {
 
         // Load the LLM Txt class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-llm-txt.php';
+
+        // Load Gemini & SEO Worker
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-gemini.php';
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-seo-worker.php';
 	}
 
     private function define_sitemap_hooks() {
@@ -70,5 +74,8 @@ class WooSuite_Core {
         $this->define_security_hooks();
         $this->define_sitemap_hooks();
         $this->define_llm_txt_hooks();
+
+        // Initialize SEO Worker (Listener)
+        new WooSuite_Seo_Worker();
 	}
 }

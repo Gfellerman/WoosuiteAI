@@ -12,3 +12,20 @@
 5:21:28 AM [vite] (client) page reload includes/class-woosuite-security.php
 5:21:59 AM [vite] (client) page reload includes/api/class-woosuite-api.php
 5:22:11 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+6:19:52 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+6:20:21 AM [vite] (client) page reload includes/class-woosuite-security.php
+6:21:10 AM [vite] (client) page reload includes/class-woosuite-core.php
+6:21:18 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+6:27:04 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+6:27:27 AM [vite] (client) page reload setup_env.sh
+6:28:28 AM [vite] (client) page reload verification/verify_seo.py
+6:28:28 AM [vite] (client) page reload verification/verify_seo.py
+6:29:17 AM [vite] (client) page reload verification/verify_seo.py
+6:30:09 AM [vite] (client) page reload verification/verify_seo.py
+6:31:03 AM [vite] (client) page reload verification/verify_seo.py
+6:32:01 AM [vite] (client) page reload verification/verify_seo.py
+6:33:11 AM [vite] (client) page reload verification/verify_seo.py
+6:34:02 AM [vite] (client) page reload verification/verify_seo.py
+6:35:43 AM [vite] (client) page reload verification/verify_seo.py
+6:41:13 AM [vite] (client) page reload verification/verify_seo.py
+6:42:12 AM [vite] (client) page reload build_plugin.sh

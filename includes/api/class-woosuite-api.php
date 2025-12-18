@@ -73,6 +73,19 @@ class WooSuite_Api {
             'callback' => array( $this, 'run_security_scan' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
+
+        // SEO Batch Routes
+        register_rest_route( $this->namespace, '/seo/batch', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'start_seo_batch' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/seo/batch-status', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_seo_batch_status' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
     }
 
     public function get_status( $request ) {
@@ -100,6 +113,7 @@ class WooSuite_Api {
         $type = $request->get_param('type') ?: 'product';
         $limit = $request->get_param('limit') ?: 50;
         $page = $request->get_param('page') ?: 1;
+        $filter = $request->get_param('filter'); // 'unoptimized' or empty
 
         $data = array();
         $total = 0;
@@ -113,6 +127,17 @@ class WooSuite_Api {
                 'paginate' => true,
                 'status' => 'publish',
             );
+
+            if ( $filter === 'unoptimized' ) {
+                 // WC doesn't make it easy to query by "meta key NOT exists" in standard args easily without meta_query
+                 $args['meta_query'] = array(
+                     array(
+                         'key'     => '_woosuite_meta_description',
+                         'compare' => 'NOT EXISTS',
+                     )
+                 );
+            }
+
             $results = wc_get_products( $args );
 
             $products = $results->products;
@@ -148,6 +173,15 @@ class WooSuite_Api {
             $args['post_mime_type'] = 'image';
         } else {
             $args['post_type'] = $type; // post, page
+        }
+
+        if ( $filter === 'unoptimized' ) {
+             $args['meta_query'] = array(
+                 array(
+                     'key'     => '_woosuite_meta_description',
+                     'compare' => 'NOT EXISTS',
+                 )
+             );
         }
 
         $query = new WP_Query( $args );
@@ -315,6 +349,22 @@ class WooSuite_Api {
         $security = new WooSuite_Security( $this->plugin_name, $this->version );
         $result = $security->perform_core_scan( 'manual' );
         return new WP_REST_Response( $result, 200 );
+    }
+
+    // --- SEO Batch ---
+
+    public function start_seo_batch( $request ) {
+        if ( ! class_exists( 'WooSuite_Seo_Worker' ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );
+        }
+        $worker = new WooSuite_Seo_Worker();
+        $worker->start_batch();
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch started' ), 200 );
+    }
+
+    public function get_seo_batch_status( $request ) {
+        $status = get_option( 'woosuite_seo_batch_status', array( 'status' => 'idle' ) );
+        return new WP_REST_Response( $status, 200 );
     }
 
     public function check_permission() {
