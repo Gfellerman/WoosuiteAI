@@ -8,3 +8,8 @@
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://192.168.0.2:3000/
 4:59:41 PM [vite] (client) page reload verify_seo_ui.py
+5:21:00 PM [vite] (client) page reload includes/api/class-woosuite-api.php
+5:21:25 PM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+5:21:39 PM [vite] (client) page reload includes/class-woosuite-gemini.php
+5:25:46 PM [vite] (client) page reload AGENTS.md
+5:25:46 PM [vite] (client) page reload workflow.md

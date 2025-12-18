@@ -86,14 +86,23 @@ class WooSuite_Gemini {
         $base64_data = base64_encode( $image_data );
         $mime_type = wp_remote_retrieve_header( $image_response, 'content-type' ) ?: 'image/jpeg';
 
+        // Sanitize filename for context: if it looks like a random hash, don't even show it to the AI
+        $clean_filename = $filename;
+        if ( preg_match( '/^[a-zA-Z0-9]{10,}\./', $filename ) || preg_match( '/\d{10,}/', $filename ) ) {
+            $clean_filename = "Unknown (Ignore Filename)";
+        }
+
         $prompt = "
             Analyze the visual content of this image to generate SEO metadata.
 
-            Context (Filename): $filename
+            Context (Filename): $clean_filename
 
             Instructions:
             1. Alt Text: Describe exactly what is visible in the image. Be specific and accessible. Max 125 chars.
-            2. Title: Create a clean, descriptive title for the image. Do NOT use the filename. Do NOT use gibberish. If the filename is random (e.g. 'DSF345.jpg'), ignore it completely and describe the image.
+            2. Title: Create a clean, descriptive title for the image based on its visual content.
+               - STRICTLY IGNORE alphanumeric codes, random IDs, or camera file names (e.g., 'IMG_001', '07854fdsa').
+               - If the filename is gibberish, look ONLY at the image.
+               - Do not include file extensions like .jpg or .png.
 
             Return strictly JSON.
         ";
