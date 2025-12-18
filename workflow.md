@@ -4,33 +4,40 @@
 WooSuite AI (Branded as **Swiss WP Secure**) is a comprehensive, all-in-one WordPress plugin designed to replace multiple single-purpose plugins. It leverages Google Gemini AI to automate and enhance Security, SEO, Marketing, Backups, and Speed Optimization.
 
 ## Current Status
-*   **Architecture:** Hybrid (React Dashboard + PHP REST API).
+*   **Architecture:** Hybrid. PHP backend (REST API) + React frontend (Dashboard).
 *   **Branding:** Author "Swisswpsecure Team". Plugin internal ID remains `woosuite-ai`.
-*   **Security Module:** Fully implemented & Enhanced.
-    *   **Firewall:** WAF with SQLi/XSS blocking, Simulation Mode, and IP Reputation.
-    *   **Deep Scan:** Background process scanning `wp-content/plugins` and `themes` for malware patterns (`eval`, `shell_exec`, etc.).
-    *   **Login Protection:** Configurable max retries (default 3) and lockout.
-    *   **Spam Protection:** Honeypot field and Link Limiter for comments.
-    *   **Advanced:** Added "High Security Mode" (Heavy) UI placeholder/warning.
-*   **SEO Module:** Fully Functional & Enhanced.
-    *   **Scope:** Products, Posts, Pages, and Images.
-    *   **Batching:** Upgraded background worker (Time-based loop, Stop Capability).
-    *   **Image SEO:** Server-side processing (PHP) for reliability.
-    *   **Title Rewrite:** Option to "Simplify Product Names" using AI.
-    *   **Fixes:** Resolved "Unoptimized" filter logic in API (verified).
-*   **Dashboard:** Fully functional Security and SEO tabs.
+*   **Security Module:** ✅ Stable.
+    *   **Features:** WAF, Deep Scan (Background), Login/Spam Protection, High Security Placeholder.
+*   **SEO Module:** ✅ Stable.
+    *   **Features:** Bulk Optimization (Time-based), Image SEO (Server-side), Unoptimized Filter, Product Title Simplification (Prototype).
+*   **Dashboard:** Fully functional.
 
 ## Recent Changes
 - [x] **SEO Batch Upgrade:** Implemented Time-Based Loop (20s) and Stop Button for background optimization.
-- [x] **Image SEO:** Moved image analysis to PHP backend to solve client-side CORS/filename issues.
-- [x] **Product Titles:** Added "Simplify Product Names" (Max 6 words) option to SEO Batch.
+- [x] **Image SEO:** Migrated image analysis from client-side (browser) to server-side (PHP) to fix filename fallback issues.
+- [x] **Product Titles:** Added "Simplify Product Names" (Max 6 words) option to SEO Batch as a prototype.
 - [x] **SEO Filter Fix:** Rewrote `get_content_items` to strictly exclude optimized items (Green status).
-- [x] **Security UI:** Added "High Security Mode" (Heavy) toggle placeholder with performance warning.
+- [x] **Security UI:** Added "High Security Mode" (Heavy) toggle placeholder.
+- [x] **Documentation:** Updated `AGENTS.md` with new architectural rules for AI and Batching.
 
-## Todo List (Next Priorities)
-1.  **Order Manager:** Implement real logic for Order Management features.
-2.  **Speed Module:** Begin implementation (Image Compression, Database Cleaner).
-3.  **Marketing:** Implement Email automation rules.
+## Todo List (Priorities)
+
+### 1. New Module: Product Content Enhancer 🌟
+*   **Concept:** A dedicated module (separate from SEO) for deep content rewriting.
+*   **Features:**
+    *   **Simplify Name:** Rewrite product titles to strictly 5-6 words (removing specs/clutter).
+    *   **Short Description:** Rewrite to max 2 words (concise).
+    *   **Description:** Enhanced, fluent description (replacing poor translations).
+*   **Implementation:** Will use the Batch Worker architecture.
+
+### 2. Order Manager
+*   Implement real logic for Order Management features.
+
+### 3. Speed Module
+*   Begin implementation (Image Compression, Database Cleaner).
+
+### 4. Marketing
+*   Implement Email automation rules.
 
 ## Development Environment Setup
 If you are starting a new session or configuring an agent environment:
