@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
 import { generateSeoMeta, generateImageSeo } from '../services/geminiService';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<number | null>(null);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   // Bulk Optimization
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -23,25 +28,37 @@ const SeoManager: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [activeTab]);
+  }, [activeTab, page]);
 
   const fetchItems = async () => {
     if (!apiUrl) return;
     setLoading(true);
     try {
-        const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=100`, {
+        const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=20&page=${page}`, {
             headers: { 'X-WP-Nonce': nonce }
         });
         if (res.ok) {
             const data = await res.json();
-            setItems(data);
-            setSelectedIds([]); // Clear selection on tab switch
+            if (data.items) {
+                 setItems(data.items);
+                 setTotalPages(data.pages);
+                 setTotalItems(data.total);
+            } else {
+                 setItems(data);
+            }
+            setSelectedIds([]);
         }
     } catch (e) {
         console.error(e);
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleTabChange = (tab: ContentType) => {
+      if (tab === activeTab) return;
+      setActiveTab(tab);
+      setPage(1);
   };
 
   const handleGenerate = async (item: ContentItem) => {
@@ -134,6 +151,14 @@ const SeoManager: React.FC = () => {
                 className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
                 <Settings size={16} /> Sitemap Settings
             </button>
+            <a
+                href={`${homeUrl}/llms.txt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2 text-gray-700"
+            >
+                <FileText size={16} /> View llms.txt
+            </a>
             {isBulkOptimizing ? (
                  <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
                      <RefreshCw size={16} className="animate-spin" />
@@ -162,7 +187,7 @@ const SeoManager: React.FC = () => {
           ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as ContentType)}
+                onClick={() => handleTabChange(tab.id as ContentType)}
                 className={`px-4 py-2 text-sm font-medium rounded-t-lg flex items-center gap-2 transition
                     ${activeTab === tab.id
                         ? 'bg-white border-b-2 border-purple-600 text-purple-600'
@@ -312,6 +337,34 @@ const SeoManager: React.FC = () => {
             )}
           </tbody>
         </table>
+        )}
+
+        {/* Pagination Controls */}
+        {!loading && items.length > 0 && (
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
+                <div className="text-sm text-gray-500">
+                    Showing {items.length} of {totalItems} items
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-sm font-medium text-gray-700">
+                        Page {page} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            </div>
         )}
       </div>
 

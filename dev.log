@@ -2,12 +2,9 @@
 > woosuite-ai-admin@0.0.0 dev
 > vite
 
-Port 3000 is in use, trying another one...
-Port 3001 is in use, trying another one...
-Port 3002 is in use, trying another one...
 
-  VITE v6.4.1  ready in 272 ms
+  VITE v6.4.1  ready in 802 ms
 
-  ➜  Local:   http://localhost:3003/
-  ➜  Network: http://192.168.0.2:3003/
-12:01:12 PM [vite] (client) page reload verification/verify_security.py
+  ➜  Local:   http://localhost:3000/
+  ➜  Network: http://192.168.0.2:3000/
+4:08:31 AM [vite] (client) page reload verification/verify_seo.py

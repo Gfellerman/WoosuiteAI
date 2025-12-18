@@ -33,11 +33,19 @@ class WooSuite_Core {
 
         // Load the Sitemap class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-sitemap.php';
+
+        // Load the LLM Txt class
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-llm-txt.php';
 	}
 
     private function define_sitemap_hooks() {
         $plugin_sitemap = new WooSuite_Sitemap( $this->plugin_name, $this->version );
         $plugin_sitemap->init();
+    }
+
+    private function define_llm_txt_hooks() {
+        $plugin_llm = new WooSuite_LLM_Txt( $this->plugin_name, $this->version );
+        $plugin_llm->init();
     }
 
     private function define_security_hooks() {
@@ -61,5 +69,6 @@ class WooSuite_Core {
 	public function run() {
         $this->define_security_hooks();
         $this->define_sitemap_hooks();
+        $this->define_llm_txt_hooks();
 	}
 }
