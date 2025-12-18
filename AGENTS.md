@@ -18,7 +18,12 @@
 - **Global Data:** React receives data from WordPress via `window.woosuiteData` (contains `nonce`, `apiUrl`, `root`).
 - **Data Integrity:** NEVER use hardcoded "marketing" numbers. If data is missing, display `0` or `null`.
 
-### 3. Workflow
+### 3. AI & Backend Architecture
+- **Server-Side AI First:** All AI generation (Text, Image, Data) must be performed on the backend (PHP `WooSuite_Gemini` class) to ensure reliability, CORS compliance, and support for batch processing. Client-side AI calls are deprecated.
+- **Batch Processing:** Background workers must use **Time-Based Loops** (e.g., `microtime` check with 20s limit) rather than fixed item counts. This maximizes throughput on varying server environments.
+- **Stop Capability:** All background processes must implement a "Stop Signal" check (via `get_option`) to allow users to cancel long-running operations.
+
+### 4. Workflow
 - **Update `workflow.md`:** You MUST update `workflow.md` at the start/end of every session to track progress.
 
 ## 🛠️ Tech Stack & Commands
