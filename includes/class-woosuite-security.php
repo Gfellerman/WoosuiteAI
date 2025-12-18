@@ -38,6 +38,11 @@ class WooSuite_Security {
      * Inspects incoming requests for malicious patterns.
      */
     public function firewall_check() {
+        // Skip for Cron Jobs (Loopback requests)
+        if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+            return;
+        }
+
         // Check if Firewall is enabled
         if ( get_option( 'woosuite_firewall_enabled', 'yes' ) !== 'yes' ) {
             return;
