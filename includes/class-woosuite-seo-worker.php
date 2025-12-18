@@ -83,6 +83,9 @@ class WooSuite_Seo_Worker {
 
             // Process Item with robust error handling
             try {
+                // Clear previous error if any
+                delete_post_meta( $post->ID, '_woosuite_seo_last_error' );
+
                 if ( $post->post_type === 'attachment' ) {
                     $this->process_image( $post );
                 } else {
@@ -91,10 +94,12 @@ class WooSuite_Seo_Worker {
             } catch ( Exception $e ) {
                 // Critical failure on this item
                 update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+                update_post_meta( $post->ID, '_woosuite_seo_last_error', substr( $e->getMessage(), 0, 250 ) );
                 error_log( "WooSuite SEO Worker CRITICAL ERROR on ID {$post->ID}: " . $e->getMessage() );
             } catch ( Throwable $e ) {
                  // Catch fatal errors in PHP 7+
                 update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+                update_post_meta( $post->ID, '_woosuite_seo_last_error', substr( $e->getMessage(), 0, 250 ) );
                 error_log( "WooSuite SEO Worker FATAL ERROR on ID {$post->ID}: " . $e->getMessage() );
             }
 
@@ -138,6 +143,7 @@ class WooSuite_Seo_Worker {
             error_log("WooSuite SEO Error (ID: {$post->ID}): $err");
 
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+            update_post_meta( $post->ID, '_woosuite_seo_last_error', $err );
             return;
         }
 
@@ -167,6 +173,7 @@ class WooSuite_Seo_Worker {
         // Anti-Loop Protection
         if ( ! $saved ) {
              update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+             update_post_meta( $post->ID, '_woosuite_seo_last_error', 'Generated data was empty.' );
         }
     }
 
@@ -174,6 +181,7 @@ class WooSuite_Seo_Worker {
         $url = wp_get_attachment_url( $post->ID );
         if ( ! $url ) {
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+            update_post_meta( $post->ID, '_woosuite_seo_last_error', 'Missing attachment URL.' );
             return;
         }
 
@@ -184,6 +192,7 @@ class WooSuite_Seo_Worker {
              error_log("WooSuite Image SEO Error (ID: {$post->ID}): $err");
 
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+            update_post_meta( $post->ID, '_woosuite_seo_last_error', $err );
             return;
         }
 
@@ -204,6 +213,7 @@ class WooSuite_Seo_Worker {
         // Anti-Loop Protection
         if ( ! $saved ) {
             update_post_meta( $post->ID, '_woosuite_seo_failed', 1 );
+            update_post_meta( $post->ID, '_woosuite_seo_last_error', 'Generated image data was empty.' );
         }
     }
 

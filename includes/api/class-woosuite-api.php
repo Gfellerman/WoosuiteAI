@@ -475,8 +475,14 @@ class WooSuite_Api {
     }
 
     public function reset_seo_batch( $request ) {
+        global $wpdb;
         update_option( 'woosuite_seo_batch_stop_signal', true );
         update_option( 'woosuite_seo_batch_status', array( 'status' => 'idle' ) );
+
+        // Clear failure flags so items can be retried
+        $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_failed'" );
+        $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_last_error'" );
+
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Reset complete' ), 200 );
     }
 

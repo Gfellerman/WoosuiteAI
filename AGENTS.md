@@ -1,40 +1,28 @@
-# WooSuite AI - Agent Guidelines
+# AGENTS.md - WooSuite AI
 
-## 🧠 Project Context
-**WooSuite AI** is an all-in-one WordPress plugin (Security, SEO, Marketing, Backup, Speed) powered by Google Gemini AI.
-- **Architecture:** Hybrid. PHP backend (REST API) + React frontend (Dashboard).
-- **Styling:** Tailwind CSS v4 (via PostCSS).
+## Project Overview
+WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Gemini AI) and Security features.
 
-## ⚠️ CRITICAL RULES (Do Not Break)
+## Coding Standards
+*   **PHP:** Follow WordPress Coding Standards. Use strict types where possible.
+*   **React:** Use functional components and Hooks. State management via local state or Context API.
+*   **CSS:** Tailwind CSS v4. Always use `@import "tailwindcss";` in CSS files.
+*   **Build:** Use `npm run build` to generate assets in `assets/`.
 
-### 1. Build & Release
-- **Source of Truth:** The release zip MUST be created using `sh build_plugin.sh`.
-- **Assets:** The `assets/` directory (containing compiled `.js` and `.css`) **MUST** be committed to the repository.
-- **Cache Busting:** All `wp_enqueue_script` and `wp_enqueue_style` calls must use `filemtime( $file_path )` as the version argument to prevent browser caching issues.
+## SEO Module Instructions
+*   **Batch Process:** The SEO Worker (`includes/class-woosuite-seo-worker.php`) runs in background batches (15s limit).
+*   **Failure Handling:** Failed items MUST be marked with `_woosuite_seo_failed` to prevent loops, BUT specific error messages MUST be logged to `_woosuite_seo_last_error`.
+*   **Image SEO:** The Gemini prompt (`includes/class-woosuite-gemini.php`) must STRICTLY ignore filenames if they appear random/alphanumeric.
+*   **Reset:** The "Reset Batch" feature must clear the failure flags (`_woosuite_seo_failed`) from the database to allow retries.
 
-### 2. Frontend (React in WP Admin)
-- **Layout:** NEVER use `h-screen` or `overflow-hidden` on the main container. It breaks the WordPress Admin bar/menu.
-    - ✅ USE: `min-h-screen`, `w-full`.
-- **Global Data:** React receives data from WordPress via `window.woosuiteData` (contains `nonce`, `apiUrl`, `root`).
-- **Data Integrity:** NEVER use hardcoded "marketing" numbers. If data is missing, display `0` or `null`.
+## Security Module Instructions
+*   **Scanner:** The Deep Scan uses a whitelist (`safe_slugs`) to skip trusted plugins.
+*   **Quarantine:** Suspicious files are moved to `wp-content/uploads/woosuite-quarantine/`.
+*   **API:** All interactive features (Ignore, Quarantine) must have corresponding API endpoints in `includes/api/class-woosuite-api.php`.
 
-### 3. AI & Backend Architecture
-- **Server-Side AI First:** All AI generation (Text, Image, Data) must be performed on the backend (PHP `WooSuite_Gemini` class) to ensure reliability, CORS compliance, and support for batch processing. Client-side AI calls are deprecated.
-- **Batch Processing:** Background workers must use **Time-Based Loops** (e.g., `microtime` check with 20s limit) rather than fixed item counts. This maximizes throughput on varying server environments.
-- **Stop Capability:** All background processes must implement a "Stop Signal" check (via `get_option`) to allow users to cancel long-running operations.
+## Verification
+*   **No Live WP:** You cannot run `wp-cli` or access a live DB. Use `tests/` with mocked WP functions.
+*   **Frontend:** Use `frontend_verification_instructions` to test UI with Playwright.
 
-### 4. Workflow
-- **Update `workflow.md`:** You MUST update `workflow.md` at the start/end of every session to track progress.
-
-## 🛠️ Tech Stack & Commands
-- **Install:** `npm install`
-- **Dev:** `npm run dev`
-- **Build:** `npm run build` (Outputs to `assets/`)
-- **Release:** `sh build_plugin.sh` (Creates `woosuite-ai.zip`)
-
-## 📂 File Structure
-- `woosuite-ai.php`: Main plugin file.
-- `includes/`: PHP classes (Admin, API, Activator).
-- `assets/`: Compiled output (JS/CSS).
-- `components/`: React components.
-- `services/`: Frontend API services.
+## Release
+*   Run `./build_plugin.sh` to create a deployment ZIP.
