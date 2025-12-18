@@ -29,3 +29,11 @@
 6:35:43 AM [vite] (client) page reload verification/verify_seo.py
 6:41:13 AM [vite] (client) page reload verification/verify_seo.py
 6:42:12 AM [vite] (client) page reload build_plugin.sh
+7:40:59 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+7:41:15 AM [vite] (client) page reload includes/class-woosuite-security.php
+7:41:29 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+7:45:21 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+7:47:44 AM [vite] (client) page reload includes/class-woosuite-core.php
+7:47:58 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+7:49:09 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
+7:55:14 AM [vite] (client) page reload workflow.md

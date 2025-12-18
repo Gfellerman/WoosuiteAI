@@ -21,8 +21,16 @@ class WooSuite_Security {
         add_action( 'woosuite_scheduled_scan', array( $this, 'perform_core_scan' ) );
 
         // Login Protection
-        add_action( 'wp_login_failed', array( $this, 'log_failed_login' ) );
-        add_filter( 'authenticate', array( $this, 'check_login_attempt' ), 1, 3 );
+        if ( get_option( 'woosuite_login_protection_enabled', 'yes' ) === 'yes' ) {
+            add_action( 'wp_login_failed', array( $this, 'log_failed_login' ) );
+            add_filter( 'authenticate', array( $this, 'check_login_attempt' ), 1, 3 );
+        }
+
+        // Spam Protection
+        if ( get_option( 'woosuite_spam_protection_enabled', 'yes' ) === 'yes' ) {
+            add_filter( 'comment_form_default_fields', array( $this, 'add_honeypot_field' ) );
+            add_filter( 'preprocess_comment', array( $this, 'check_spam_comment' ) );
+        }
     }
 
     /**
@@ -234,9 +242,9 @@ class WooSuite_Security {
         $ip = $this->get_client_ip();
         $transient_name = 'woosuite_login_attempts_' . md5( $ip );
         $attempts = get_transient( $transient_name );
+        $max_retries = (int) get_option( 'woosuite_login_max_retries', 3 );
 
-        // Limit: 3 attempts
-        if ( $attempts && $attempts >= 3 ) {
+        if ( $attempts && $attempts >= $max_retries ) {
              // Log the blocking event
              $this->log_threat( $ip, 'Login Lockout (Too many attempts)', 'high', true );
 
@@ -247,6 +255,43 @@ class WooSuite_Security {
         }
 
         return $user;
+    }
+
+    /**
+     * Add Honeypot field to comment form (Spam Protection)
+     */
+    public function add_honeypot_field( $fields ) {
+        // Hidden field that humans won't see but bots might fill
+        $fields['woosuite_check'] = '<p style="display:none;"><label>Leave this empty:</label><input type="text" name="woosuite_honeypot" value="" /></p>';
+        return $fields;
+    }
+
+    /**
+     * Check Comment for Spam (Honeypot + Links)
+     */
+    public function check_spam_comment( $commentdata ) {
+        // 1. Check Honeypot
+        if ( ! empty( $_POST['woosuite_honeypot'] ) ) {
+            wp_die( 'Spam detected.' );
+        }
+
+        // 2. Check Link Limit
+        $content = $commentdata['comment_content'];
+        $link_count = preg_match_all( '/http(s)?:\/\//i', $content, $matches );
+
+        if ( $link_count > 2 ) {
+            // Mark as spam or pending
+            // For now, we flag it as pending moderation if not already
+            // Or strictly die? User wanted "Best spam protection".
+            // Let's set it to '0' (pending) strictly, or spam.
+            // Let's just die for now as requested "not to slowdown...".
+            // Actually, "not to slowdown" -> blocking is fast.
+            // But user might want real comments with links.
+            // Better: mark as spam in DB.
+            $commentdata['comment_approved'] = 'spam';
+        }
+
+        return $commentdata;
     }
 
     /**
