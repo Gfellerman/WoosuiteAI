@@ -16,6 +16,7 @@ const SeoManager: React.FC = () => {
 
   // Bulk Optimization
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectAllServer, setSelectAllServer] = useState(false);
   const [isBulkOptimizing, setIsBulkOptimizing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
@@ -132,9 +133,57 @@ const SeoManager: React.FC = () => {
       setSelectedIds([]); // Clear selection
   };
 
+  const handleBulkOptimizeAll = async () => {
+      setIsBulkOptimizing(true);
+      setBulkProgress({ current: 0, total: totalItems });
+
+      let processedCount = 0;
+
+      // Iterate all pages
+      for (let p = 1; p <= totalPages; p++) {
+          try {
+              // Fetch page p
+              const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=20&page=${p}`, {
+                    headers: { 'X-WP-Nonce': nonce }
+              });
+              if (!res.ok) continue;
+
+              const data = await res.json();
+              // Handle both response structures (array or object with items)
+              const pageItems = data.items || data;
+
+              if (Array.isArray(pageItems)) {
+                  for (const item of pageItems) {
+                      await handleGenerate(item);
+                      processedCount++;
+                      setBulkProgress(prev => ({ ...prev, current: processedCount }));
+                  }
+              }
+          } catch (e) {
+              console.error(`Failed to process page ${p}`, e);
+          }
+      }
+
+      setIsBulkOptimizing(false);
+      setSelectAllServer(false);
+      setSelectedIds([]);
+      fetchItems(); // Refresh current view
+  };
+
   const toggleSelectAll = () => {
-      if (selectedIds.length === items.length) setSelectedIds([]);
-      else setSelectedIds(items.map(i => i.id));
+      if (selectAllServer) {
+          setSelectAllServer(false);
+          setSelectedIds([]);
+      } else if (selectedIds.length === items.length) {
+          setSelectedIds([]);
+      } else {
+          setSelectedIds(items.map(i => i.id));
+      }
+  };
+
+  const handleSelectAllServer = () => {
+      setSelectAllServer(true);
+      setSelectedIds(items.map(i => i.id)); // Visual consistency
   };
 
   return (
@@ -166,12 +215,12 @@ const SeoManager: React.FC = () => {
                  </div>
             ) : (
                 <button
-                    onClick={handleBulkOptimize}
-                    disabled={selectedIds.length === 0}
+                    onClick={selectAllServer ? handleBulkOptimizeAll : handleBulkOptimize}
+                    disabled={selectedIds.length === 0 && !selectAllServer}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2
-                        ${selectedIds.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                        ${(selectedIds.length === 0 && !selectAllServer) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                 >
-                    <Sparkles size={16} /> Bulk Optimize ({selectedIds.length})
+                    <Sparkles size={16} /> Bulk Optimize ({selectAllServer ? totalItems : selectedIds.length})
                 </button>
             )}
         </div>
@@ -205,10 +254,32 @@ const SeoManager: React.FC = () => {
         ) : (
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-100">
+            {selectedIds.length === items.length && items.length > 0 && !selectAllServer && totalItems > items.length && (
+              <tr>
+                <td colSpan={5} className="p-2 bg-purple-50 text-center border-b border-purple-100">
+                    <span className="text-sm text-purple-800">
+                        All {items.length} items on this page are selected.
+                        <button onClick={handleSelectAllServer} className="ml-2 font-bold underline hover:text-purple-900">
+                            Select all {totalItems} items in {activeTab}
+                        </button>
+                    </span>
+                </td>
+              </tr>
+            )}
+            {selectAllServer && (
+              <tr>
+                <td colSpan={5} className="p-2 bg-purple-100 text-center border-b border-purple-200">
+                    <span className="text-sm text-purple-900 font-medium">
+                        All {totalItems} items are selected.
+                        <button onClick={toggleSelectAll} className="ml-2 underline text-purple-700">Clear selection</button>
+                    </span>
+                </td>
+              </tr>
+            )}
             <tr>
               <th className="p-4 w-8">
                   <input type="checkbox"
-                    checked={items.length > 0 && selectedIds.length === items.length}
+                    checked={(items.length > 0 && selectedIds.length === items.length) || selectAllServer}
                     onChange={toggleSelectAll}
                     className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                   />
