@@ -31,6 +31,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/settings/test-connection', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'test_api_connection' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/content', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_content_items' ),
@@ -187,6 +193,26 @@ class WooSuite_Api {
     public function get_settings( $request ) {
         $api_key = get_option( 'woosuite_gemini_api_key', '' );
         return new WP_REST_Response( array( 'apiKey' => $api_key ), 200 );
+    }
+
+    public function test_api_connection( $request ) {
+        $gemini = new WooSuite_Gemini();
+        $result = $gemini->test_connection();
+
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array(
+                'success' => false,
+                'message' => $result->get_error_message(),
+                'code' => $result->get_error_code(),
+                'data' => $result->get_error_data()
+            ), 500 );
+        }
+
+        return new WP_REST_Response( array(
+            'success' => true,
+            'message' => 'Connection Successful!',
+            'data' => $result
+        ), 200 );
     }
 
     public function get_content_items( $request ) {

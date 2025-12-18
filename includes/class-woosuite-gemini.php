@@ -9,6 +9,43 @@ class WooSuite_Gemini {
         $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
     }
 
+    public function test_connection() {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Gemini API Key is missing.' );
+        }
+
+        $body = array(
+            'contents' => array(
+                array(
+                    'parts' => array(
+                        array( 'text' => "Say 'Hello' if you can hear me." )
+                    )
+                )
+            )
+        );
+
+        // Call the API but we want the raw response for debugging if possible
+        $response = wp_remote_post( $this->api_url . '?key=' . $this->api_key, array(
+            'headers' => array( 'Content-Type' => 'application/json' ),
+            'body'    => json_encode( $body ),
+            'timeout' => 30
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body_str = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body_str, true );
+
+        if ( $code !== 200 ) {
+            return new WP_Error( 'api_error', "Gemini API Error ($code): " . $body_str );
+        }
+
+        return array( 'status' => $code, 'raw_response' => $data );
+    }
+
     public function generate_seo_meta( $item ) {
         if ( empty( $this->api_key ) ) {
             return new WP_Error( 'missing_key', 'Gemini API Key is missing.' );
