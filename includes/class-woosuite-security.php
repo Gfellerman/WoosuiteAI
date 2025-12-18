@@ -198,8 +198,15 @@ class WooSuite_Security {
     /**
      * Perform Core Integrity Scan
      * Uses WordPress built-in checksum verification.
+     *
+     * @param string $source 'manual' or 'auto'
      */
-    public function perform_core_scan() {
+    public function perform_core_scan( $source = 'auto' ) {
+        // If called by hook (action), the arg might be different or empty, so check type
+        if ( ! is_string( $source ) ) {
+            $source = 'auto';
+        }
+
         if ( ! function_exists( 'get_core_checksums' ) ) {
             require_once ABSPATH . 'wp-admin/includes/update.php';
         }
@@ -231,11 +238,13 @@ class WooSuite_Security {
         // Save result to transient or option
         update_option( 'woosuite_last_scan_results', $modified_files );
         update_option( 'woosuite_last_scan_time', current_time( 'mysql' ) );
+        update_option( 'woosuite_last_scan_source', $source );
 
         return array(
             'status' => 'complete',
             'issues_found' => count( $modified_files ),
-            'details' => $modified_files
+            'details' => $modified_files,
+            'source' => $source
         );
     }
 

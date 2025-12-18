@@ -281,6 +281,7 @@ class WooSuite_Api {
             'simulation_mode' => get_option( 'woosuite_firewall_simulation_mode', 'no' ) === 'yes',
             'login_enabled' => true, // Currently always active
             'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
+            'last_scan_source' => get_option( 'woosuite_last_scan_source', 'auto' ),
             'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
         );
         return new WP_REST_Response( $status, 200 );
@@ -312,7 +313,7 @@ class WooSuite_Api {
 
     public function run_security_scan( $request ) {
         $security = new WooSuite_Security( $this->plugin_name, $this->version );
-        $result = $security->perform_core_scan();
+        $result = $security->perform_core_scan( 'manual' );
         return new WP_REST_Response( $result, 200 );
     }
 

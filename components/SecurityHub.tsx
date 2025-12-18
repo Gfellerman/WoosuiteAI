@@ -15,6 +15,7 @@ const SecurityHub: React.FC = () => {
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [lastScan, setLastScan] = useState<string>('Never');
+  const [lastScanSource, setLastScanSource] = useState<string>('auto');
 
   const { apiUrl, nonce, homeUrl } = window.woosuiteData || {};
 
@@ -41,6 +42,7 @@ const SecurityHub: React.FC = () => {
 
             setLoginEnabled(data.login_enabled);
             setLastScan(data.last_scan);
+            setLastScanSource(data.last_scan_source || 'auto');
         }
     } catch (e) {
         console.error("Failed to fetch security status", e);
@@ -123,14 +125,18 @@ const SecurityHub: React.FC = () => {
             >
                 <ShieldAlert size={18} /> Test Firewall
             </a>
-            <button
-                onClick={handleScan}
-                disabled={scanning}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm disabled:opacity-75"
-            >
-                {scanning ? <Activity className="animate-spin" size={18} /> : <FileSearch size={18} />}
-                {scanning ? 'Scanning Files...' : 'Run Malware Scan'}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+                <button
+                    onClick={handleScan}
+                    disabled={scanning}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm disabled:opacity-75"
+                    title="Runs a Core Integrity Check (Quick Scan)"
+                >
+                    {scanning ? <Activity className="animate-spin" size={18} /> : <FileSearch size={18} />}
+                    {scanning ? 'Scanning Files...' : 'Run Quick Scan'}
+                </button>
+                <span className="text-[10px] text-gray-400 font-medium">Core Integrity Only</span>
+            </div>
         </div>
       </div>
 
@@ -168,7 +174,14 @@ const SecurityHub: React.FC = () => {
              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Clean</span>
           </div>
           <h3 className="font-bold text-gray-800">File Integrity</h3>
-          <p className="text-xs text-gray-500 mt-1">Last scan: {lastScan}</p>
+          <div className="mt-1">
+             <p className="text-xs text-gray-500">Last scan: {lastScan}</p>
+             {lastScan !== 'Never' && (
+                <p className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mt-0.5">
+                    Trigger: {lastScanSource === 'manual' ? 'Manual' : 'Auto (12h)'}
+                </p>
+             )}
+          </div>
         </div>
 
         {/* Login Security Card */}
