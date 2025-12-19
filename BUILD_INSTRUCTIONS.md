@@ -27,22 +27,17 @@ WooSuite AI uses a hybrid architecture with a PHP backend and a React frontend (
     ```
     This command compiles the React code into `assets/woosuite-app.js` and `assets/woosuite-app.css`.
 
-4.  **Deployment / Zipping:**
-    When packaging the plugin, **ensure the `assets/` folder is included**.
+4.  **Deployment / Zipping (CRITICAL):**
+    When packaging the plugin, you **must** verify that the `woosuite-ai.zip` file is up-to-date with your latest changes.
 
-    **Do NOT zip the `src` folder or `node_modules`.**
-
-    The critical files for the plugin to work are:
-    *   `woosuite-ai.php`
-    *   `includes/` (all PHP files)
-    *   `assets/` (the built JS/CSS)
-    *   `vendor/` (if you add PHP composer dependencies later)
-
-    **Recommended Method:** Use the provided build script:
+    **ALWAYS run this command before submitting:**
     ```bash
-    sh build_plugin.sh
+    ./build_plugin.sh
     ```
     This script automatically installs dependencies, builds the React app, and creates the zip file with the correct exclusions.
+
+    **Verification Step:**
+    Run `ls -l woosuite-ai.zip` to confirm the timestamp matches the current time. Do not assume the file is updated automatically.
 
 ## Architecture Notes
 

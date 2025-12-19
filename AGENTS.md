@@ -24,5 +24,7 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Gemini
 *   **No Live WP:** You cannot run `wp-cli` or access a live DB. Use `tests/` with mocked WP functions.
 *   **Frontend:** Use `frontend_verification_instructions` to test UI with Playwright.
 
-## Release
-*   Run `./build_plugin.sh` to create a deployment ZIP.
+## Release & Submission Checklist (MANDATORY)
+*   **Update Zip:** You **MUST** run `./build_plugin.sh` before every submission.
+*   **Verify Zip:** Check the modification time of `woosuite-ai.zip` (`ls -l woosuite-ai.zip`). It **must** match the current time.
+*   **Never Submit Stale Zip:** If `woosuite-ai.zip` is older than your latest code changes, your submission is incomplete.
