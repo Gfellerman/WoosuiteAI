@@ -27,7 +27,7 @@ const Settings: React.FC = () => {
       setSystemKeyPresent(true);
     } else {
         // Fallback to localStorage for dev/demo mode
-        const storedKey = localStorage.getItem('gemini_api_key');
+        const storedKey = localStorage.getItem('groq_api_key');
         if (storedKey) setApiKey(storedKey);
 
         if (process.env.API_KEY) {
@@ -43,9 +43,9 @@ const Settings: React.FC = () => {
 
     // Save locally (always useful for UI persistence)
     if (apiKey.trim()) {
-        localStorage.setItem('gemini_api_key', apiKey.trim());
+        localStorage.setItem('groq_api_key', apiKey.trim());
     } else {
-        localStorage.removeItem('gemini_api_key');
+        localStorage.removeItem('groq_api_key');
     }
 
     // Save to WordPress Backend
@@ -125,7 +125,7 @@ const Settings: React.FC = () => {
           const data = await res.json();
 
           if (res.ok && data.success) {
-              setTestResult({ success: true, message: 'Connection Successful! Gemini API is reachable.' });
+              setTestResult({ success: true, message: 'Connection Successful! Groq API is reachable.' });
           } else {
               setTestResult({
                   success: false,
@@ -158,7 +158,7 @@ function woosuite_ai_enqueue_scripts() {
     wp_localize_script('woosuite-ai-app', 'woosuiteData', array(
         'root' => esc_url_raw(rest_url()),
         'nonce' => wp_create_nonce('wp_rest'),
-        'apiKey' => get_option('woosuite_gemini_key'),
+        'apiKey' => get_option('woosuite_gemini_api_key'),
     ));
 }
 
@@ -270,26 +270,26 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
                             <Key size={20} />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-gray-800">Gemini API Configuration</h3>
-                            <p className="text-sm text-gray-500">Required for AI SEO, Search, and Email features.</p>
+                            <h3 className="font-semibold text-gray-800">Groq API Configuration</h3>
+                            <p className="text-sm text-gray-500">Powered by Llama 3.1 & 3.2 Vision (High Speed).</p>
                         </div>
                     </div>
                     <div className="p-6 space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Google Gemini API Key</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Groq API Key</label>
                             <div className="relative">
                                 <input 
                                     type="password" 
                                     value={apiKey}
                                     onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="AIzaSy..."
+                                    placeholder="gsk_..."
                                     className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none transition font-mono"
                                 />
                                 <Key className="absolute left-3 top-3 text-gray-400" size={16} />
                             </div>
                             <div className="flex justify-between items-start mt-2">
                                 <p className="text-xs text-gray-500">
-                                    Enter your personal API key from Google AI Studio.
+                                    Enter your Groq API Key.
                                     {systemKeyPresent && <span className="text-green-600 ml-1 font-medium flex items-center inline-flex gap-1"><ShieldCheck size={10} /> System key detected.</span>}
                                 </p>
                                 <button

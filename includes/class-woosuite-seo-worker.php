@@ -2,11 +2,12 @@
 
 class WooSuite_Seo_Worker {
 
-    private $gemini;
+    private $groq;
     private $log_option = 'woosuite_debug_log';
 
     public function __construct() {
-        $this->gemini = new WooSuite_Gemini();
+        // Switch to Groq
+        $this->groq = new WooSuite_Groq();
         add_action( 'woosuite_seo_batch_process', array( $this, 'process_batch' ) );
     }
 
@@ -25,14 +26,14 @@ class WooSuite_Seo_Worker {
         if ( count( $logs ) > 50 ) {
             $logs = array_slice( $logs, 0, 50 );
         }
-        update_option( $this->log_option, $logs, false ); // Autoload=false to save memory
+        update_option( $this->log_option, $logs, false );
     }
 
     public function start_batch() {
         update_option( 'woosuite_seo_batch_stop_signal', false );
 
         $total = $this->get_total_unoptimized_count();
-        $this->log( "Starting Batch. Total items found: $total" );
+        $this->log( "Starting Batch (Groq Engine). Total items found: $total" );
 
         update_option( 'woosuite_seo_batch_status', array(
             'status' => 'running',
@@ -43,20 +44,14 @@ class WooSuite_Seo_Worker {
             'message' => "Starting optimization of $total items..."
         ));
 
-        // Clear previous "processed" flags if this is a fresh start?
-        // No, we rely on 'reset_seo_batch' for that.
-        // Here we just pick up where we left off.
-
         if ( ! wp_next_scheduled( 'woosuite_seo_batch_process' ) ) {
             wp_schedule_single_event( time(), 'woosuite_seo_batch_process' );
         }
     }
 
     public function process_batch() {
-        // Prevent PHP timeouts
-        if ( function_exists( 'set_time_limit' ) ) set_time_limit( 300 ); // Try to give it more time if allowed
+        if ( function_exists( 'set_time_limit' ) ) set_time_limit( 300 );
 
-        // 1. Check Stop Signal
         if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
             $this->stop_batch("Process stopped by user.");
             return;
@@ -65,27 +60,21 @@ class WooSuite_Seo_Worker {
         $status = get_option( 'woosuite_seo_batch_status' );
         if ( ! $status || $status['status'] !== 'running' ) return;
 
-        // Update heartbeat
         $status['last_updated'] = time();
         update_option( 'woosuite_seo_batch_status', $status );
 
-        // 2. Process ONE item at a time (Safest for shared hosting / timeouts)
-        // We can loop, but safely.
         $start_time = microtime( true );
-        // Increase execution time slightly to accommodate the sleep, but keep it safe for shared hosts (usually 30-60s limit)
-        // We aim to process ~2 items per batch event (2 * 6s delay = 12s + processing time)
+        // Groq is fast, but we limit execution time to keep the server happy
         $max_execution_time = 25;
 
         try {
             while ( ( microtime( true ) - $start_time ) < $max_execution_time ) {
 
-                // Double check stop signal
                 if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
                     $this->stop_batch("Process stopped by user.");
                     return;
                 }
 
-                // Check if status changed (e.g., paused by rate limit)
                 $status = get_option( 'woosuite_seo_batch_status' );
                 if ( $status['status'] !== 'running' ) {
                     return;
@@ -97,7 +86,7 @@ class WooSuite_Seo_Worker {
                     $this->log( "No more items to process. Batch Complete." );
                     $status['status'] = 'complete';
                     $status['message'] = 'Optimization Complete!';
-                    $status['processed'] = $status['total']; // Ensure UI shows 100%
+                    $status['processed'] = $status['total'];
                     $status['last_updated'] = time();
                     update_option( 'woosuite_seo_batch_status', $status );
                     return;
@@ -106,14 +95,13 @@ class WooSuite_Seo_Worker {
                 $id = $ids[0];
                 $result = $this->process_single_item( $id, $status );
 
-                // If Rate Limit Hit, break loop immediately (process_single_item handles status update)
                 if ( $result === 'RATE_LIMIT' ) {
                     break;
                 }
 
-                // Smart Throttling for Free Tier
-                // Sleep for 6 seconds to ensure we stay under ~10 RPM
-                sleep(6);
+                // Smart Throttling for Groq Free Tier (approx 30 RPM = 1 request every 2s)
+                // We add a slight buffer (2s)
+                sleep(2);
             }
         } catch ( Exception $e ) {
             $this->log( "CRITICAL BATCH ERROR: " . $e->getMessage() );
@@ -121,9 +109,7 @@ class WooSuite_Seo_Worker {
              $this->log( "FATAL BATCH ERROR: " . $e->getMessage() );
         }
 
-        // 3. Always Schedule Next Run (unless stopped or complete)
         if ( ! get_option( 'woosuite_seo_batch_stop_signal' ) && $status['status'] === 'running' ) {
-             // Add a small delay (1s) to prevent CPU spiking
              wp_schedule_single_event( time() + 1, 'woosuite_seo_batch_process' );
         }
     }
@@ -137,7 +123,6 @@ class WooSuite_Seo_Worker {
 
         $this->log( "Processing ID {$id} ({$post->post_type})..." );
 
-        // Mark as 'processing'
         update_post_meta( $id, '_woosuite_seo_processed_at', time() );
 
         try {
@@ -149,7 +134,6 @@ class WooSuite_Seo_Worker {
                 $this->process_text( $post, $rewrite_titles );
             }
 
-            // Update Global Status
             $status['processed']++;
             $status['last_updated'] = time();
             $status['message'] = "Processed ID {$id}: " . substr($post->post_title, 0, 30) . "...";
@@ -162,8 +146,6 @@ class WooSuite_Seo_Worker {
             $this->log( "Error processing ID {$id}: " . $msg );
 
             if ( $msg === 'RATE_LIMIT_HIT' ) {
-                // Do NOT mark as failed.
-                // Pause batch instead.
                 $this->log( "Rate Limit Hit! Pausing batch..." );
 
                 $status['status'] = 'paused';
@@ -171,7 +153,6 @@ class WooSuite_Seo_Worker {
                 $status['last_updated'] = time();
                 update_option( 'woosuite_seo_batch_status', $status );
 
-                // Clear the processed timestamp so it gets picked up again
                 delete_post_meta( $id, '_woosuite_seo_processed_at' );
 
                 return 'RATE_LIMIT';
@@ -205,7 +186,8 @@ class WooSuite_Seo_Worker {
             if ( $product ) $item['price'] = $product->get_price();
         }
 
-        $result = $this->gemini->generate_seo_meta( $item );
+        // Call Groq
+        $result = $this->groq->generate_seo_meta( $item );
 
         if ( is_wp_error( $result ) ) {
             if ( $result->get_error_code() === 'rate_limit' ) {
@@ -218,7 +200,6 @@ class WooSuite_Seo_Worker {
             throw new Exception( "AI returned empty result." );
         }
 
-        // Save Data
         $updates = 0;
 
         if ( ! empty( $result['title'] ) ) {
@@ -246,14 +227,9 @@ class WooSuite_Seo_Worker {
             $updates++;
         }
 
-        // Even if description wasn't generated (maybe AI skipped it),
-        // we count it as processed because we set '_woosuite_seo_processed_at' earlier.
-        // This prevents the infinite loop.
-
         if ( $updates === 0 ) {
             $this->log( "ID {$post->ID} - AI result valid but no fields were updated." );
         } else {
-            // Clear any previous error
             delete_post_meta( $post->ID, '_woosuite_seo_failed' );
             delete_post_meta( $post->ID, '_woosuite_seo_last_error' );
         }
@@ -265,7 +241,8 @@ class WooSuite_Seo_Worker {
             throw new Exception( "Missing attachment URL." );
         }
 
-        $result = $this->gemini->generate_image_seo( $url, basename( $url ) );
+        // Call Groq
+        $result = $this->groq->generate_image_seo( $url, basename( $url ) );
 
         if ( is_wp_error( $result ) ) {
              if ( $result->get_error_code() === 'rate_limit' ) {
@@ -298,9 +275,6 @@ class WooSuite_Seo_Worker {
     }
 
     private function get_next_batch_items( $limit ) {
-        // Updated Logic: We now exclude items that have '_woosuite_seo_processed_at'
-        // This is crucial to stop the infinite loop on items where AI fails to generate a Description
-
         // Text Items
         $posts = get_posts( array(
             'post_type' => array( 'product', 'post', 'page' ),
@@ -311,9 +285,9 @@ class WooSuite_Seo_Worker {
             'order' => 'ASC',
             'meta_query' => array(
                 'relation' => 'AND',
-                array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ), // Still check if unoptimized
+                array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' ) // New safety check
+                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
             )
         ) );
 
@@ -340,7 +314,6 @@ class WooSuite_Seo_Worker {
     }
 
     private function get_total_unoptimized_count() {
-        // Query must match get_next_batch_items logic to be accurate
         $q1 = new WP_Query( array(
             'post_type' => array( 'product', 'post', 'page' ),
             'post_status' => 'publish',

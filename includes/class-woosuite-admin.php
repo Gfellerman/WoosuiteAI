@@ -41,7 +41,7 @@ class WooSuite_Admin {
         ?>
         <div class="wrap">
             <h1>WooSuite AI - Connection Test</h1>
-            <p>Use this tool to verify if your server can connect to Google Gemini API.</p>
+            <p>Use this tool to verify if your server can connect to Groq API.</p>
 
             <div style="background: #fff; padding: 20px; border: 1px solid #ccc; max-width: 600px;">
                 <p><strong>API Key Status:</strong> <?php echo get_option('woosuite_gemini_api_key') ? 'Present (Hidden)' : 'Missing'; ?></p>
@@ -131,7 +131,7 @@ class WooSuite_Admin {
                 // Wait for React to render Settings tab
                 // We use a simple interval to check for the Settings header
                 var checkSettings = setInterval(function() {
-                     var settingsHeader = $('h3:contains(\"Gemini API Configuration\")');
+                     var settingsHeader = $('h3:contains(\"Groq API Configuration\")');
                      if (settingsHeader.length > 0 && $('#injected-test-btn').length === 0) {
                           var container = settingsHeader.closest('div').parent();
                           var btn = $('<button type=\"button\" id=\"injected-test-btn\" class=\"button button-secondary\" style=\"margin-left:10px;\">Test API Connection</button>');

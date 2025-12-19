@@ -161,8 +161,8 @@ class WooSuite_Api {
     }
 
     public function test_api_connection( $request ) {
-        $gemini = new WooSuite_Gemini();
-        $result = $gemini->test_connection();
+        $groq = new WooSuite_Groq();
+        $result = $groq->test_connection();
 
         if ( is_wp_error( $result ) ) {
             return new WP_REST_Response( array(
@@ -308,11 +308,11 @@ class WooSuite_Api {
         $post = get_post( $id );
         if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
 
-        $gemini = new WooSuite_Gemini();
+        $groq = new WooSuite_Groq();
 
         if ( $post->post_type === 'attachment' ) {
             $url = wp_get_attachment_url( $id );
-            $result = $gemini->generate_image_seo( $url, basename( $url ) );
+            $result = $groq->generate_image_seo( $url, basename( $url ) );
         } else {
              $item = array(
                 'type' => $post->post_type,
@@ -324,7 +324,7 @@ class WooSuite_Api {
                 $product = wc_get_product( $post->ID );
                 if ( $product ) $item['price'] = $product->get_price();
             }
-            $result = $gemini->generate_seo_meta( $item );
+            $result = $groq->generate_seo_meta( $item );
         }
 
         if ( is_wp_error( $result ) ) {
