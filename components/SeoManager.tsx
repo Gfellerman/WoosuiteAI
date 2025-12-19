@@ -27,6 +27,9 @@ const SeoManager: React.FC = () => {
   const [showStartModal, setShowStartModal] = useState(false);
   const [rewriteTitles, setRewriteTitles] = useState(false);
 
+  // Connection Test
+  const [testingConnection, setTestingConnection] = useState(false);
+
   // Sitemap
   const [showSitemapModal, setShowSitemapModal] = useState(false);
 
@@ -130,14 +133,37 @@ const SeoManager: React.FC = () => {
 
   const resetBackgroundBatch = async () => {
       if (!apiUrl) return;
-      if (!confirm("Are you sure? This will force the process status to 'idle'. Use this if the process is stuck.")) return;
+      if (!confirm("Are you sure? This will force the process status to 'idle' and CLEAR all error flags. Use this if the process is stuck.")) return;
       try {
           await fetch(`${apiUrl}/seo/batch/reset`, {
               method: 'POST',
               headers: { 'X-WP-Nonce': nonce }
           });
           checkBatchStatus();
+          fetchItems(); // Refresh list to remove error badges
       } catch (e) { console.error(e); }
+  };
+
+  const testConnection = async () => {
+    if (!apiUrl) return;
+    setTestingConnection(true);
+    try {
+        const res = await fetch(`${apiUrl}/settings/test-connection`, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            // Check if we can detect quota issues from the raw response
+            alert("Connection Successful! Gemini API is responding.");
+        } else {
+            alert("Connection Failed:\n" + (data.message || "Unknown Error"));
+        }
+    } catch (e: any) {
+        alert("Connection Error: " + e.message);
+    } finally {
+        setTestingConnection(false);
+    }
   };
 
   const handleTabChange = (tab: ContentType) => {
@@ -265,9 +291,18 @@ const SeoManager: React.FC = () => {
         </div>
         <div className="flex gap-2">
             <button
+                onClick={testConnection}
+                disabled={testingConnection}
+                className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2"
+            >
+                {testingConnection ? <RefreshCw size={16} className="animate-spin" /> : <Settings size={16} />}
+                Test API
+            </button>
+
+            <button
                 onClick={() => setShowSitemapModal(true)}
                 className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
-                <Settings size={16} /> Sitemap Settings
+                <Layout size={16} /> Sitemap
             </button>
             <a
                 href={`${homeUrl}/llms.txt`}

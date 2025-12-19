@@ -72,7 +72,9 @@ class WooSuite_Seo_Worker {
         // 2. Process ONE item at a time (Safest for shared hosting / timeouts)
         // We can loop, but safely.
         $start_time = microtime( true );
-        $max_execution_time = 20; // Run for max 20 seconds per batch event
+        // Increase execution time slightly to accommodate the sleep, but keep it safe for shared hosts (usually 30-60s limit)
+        // We aim to process ~2 items per batch event (2 * 6s delay = 12s + processing time)
+        $max_execution_time = 25;
 
         try {
             while ( ( microtime( true ) - $start_time ) < $max_execution_time ) {
@@ -80,6 +82,12 @@ class WooSuite_Seo_Worker {
                 // Double check stop signal
                 if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
                     $this->stop_batch("Process stopped by user.");
+                    return;
+                }
+
+                // Check if status changed (e.g., paused by rate limit)
+                $status = get_option( 'woosuite_seo_batch_status' );
+                if ( $status['status'] !== 'running' ) {
                     return;
                 }
 
@@ -96,10 +104,16 @@ class WooSuite_Seo_Worker {
                 }
 
                 $id = $ids[0];
-                $this->process_single_item( $id, $status );
+                $result = $this->process_single_item( $id, $status );
 
-                // Refresh status from DB in case it changed (though we just updated it in process_single_item)
-                $status = get_option( 'woosuite_seo_batch_status' );
+                // If Rate Limit Hit, break loop immediately (process_single_item handles status update)
+                if ( $result === 'RATE_LIMIT' ) {
+                    break;
+                }
+
+                // Smart Throttling for Free Tier
+                // Sleep for 6 seconds to ensure we stay under ~10 RPM
+                sleep(6);
             }
         } catch ( Exception $e ) {
             $this->log( "CRITICAL BATCH ERROR: " . $e->getMessage() );
@@ -118,14 +132,12 @@ class WooSuite_Seo_Worker {
         $post = get_post( $id );
         if ( ! $post ) {
              update_post_meta( $id, '_woosuite_seo_failed', 1 );
-             return;
+             return 'ERROR';
         }
 
         $this->log( "Processing ID {$id} ({$post->post_type})..." );
 
-        // Mark as 'processing' to prevent other workers picking it up (if parallel)
-        // For now, our get_next_batch_items logic handles this via 'NOT EXISTS' checks
-        // But we should set a flag to avoid infinite loops if we fail to save description
+        // Mark as 'processing'
         update_post_meta( $id, '_woosuite_seo_processed_at', time() );
 
         try {
@@ -143,10 +155,31 @@ class WooSuite_Seo_Worker {
             $status['message'] = "Processed ID {$id}: " . substr($post->post_title, 0, 30) . "...";
             update_option( 'woosuite_seo_batch_status', $status );
 
+            return 'SUCCESS';
+
         } catch ( Exception $e ) {
-            $this->log( "Error processing ID {$id}: " . $e->getMessage() );
+            $msg = $e->getMessage();
+            $this->log( "Error processing ID {$id}: " . $msg );
+
+            if ( $msg === 'RATE_LIMIT_HIT' ) {
+                // Do NOT mark as failed.
+                // Pause batch instead.
+                $this->log( "Rate Limit Hit! Pausing batch..." );
+
+                $status['status'] = 'paused';
+                $status['message'] = 'Paused due to API Rate Limit. Auto-resuming shortly...';
+                $status['last_updated'] = time();
+                update_option( 'woosuite_seo_batch_status', $status );
+
+                // Clear the processed timestamp so it gets picked up again
+                delete_post_meta( $id, '_woosuite_seo_processed_at' );
+
+                return 'RATE_LIMIT';
+            }
+
             update_post_meta( $id, '_woosuite_seo_failed', 1 );
-            update_post_meta( $id, '_woosuite_seo_last_error', substr( $e->getMessage(), 0, 250 ) );
+            update_post_meta( $id, '_woosuite_seo_last_error', substr( $msg, 0, 250 ) );
+            return 'ERROR';
         }
     }
 
