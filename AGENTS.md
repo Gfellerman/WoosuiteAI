@@ -16,7 +16,10 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq A
 *   **Failure Handling:**
     *   **Rate Limits (429):** Must pause the batch, NOT mark items as failed.
     *   **Errors:** Genuine errors mark items with `_woosuite_seo_failed` and log the message to `_woosuite_seo_last_error`.
-*   **Image SEO:** The prompt must STRICTLY ignore filenames if they appear random/alphanumeric.
+    *   **Stuck Items:** The worker must cleanup items stuck in 'processing' state (older than 10 mins) to prevent indefinite hangs.
+*   **Image SEO:**
+    *   The prompt must STRICTLY ignore filenames if they appear random/alphanumeric.
+    *   **Size Limit:** Images > 4MB must be skipped (return error) to prevent PHP memory exhaustion or API timeouts.
 
 ## Security Module Instructions
 *   **Scanner:** The Deep Scan uses a whitelist (`safe_slugs`) to skip trusted plugins.
