@@ -13,8 +13,12 @@ const Settings: React.FC = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'general' | 'install'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'install' | 'logs'>('general');
   const [copied, setCopied] = useState(false);
+
+  // Logs State
+  const [logs, setLogs] = useState<string[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     // Check for global data first
@@ -76,6 +80,30 @@ const Settings: React.FC = () => {
         setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
+
+  const fetchLogs = async () => {
+    if (!window.woosuiteData?.apiUrl) return;
+    setLoadingLogs(true);
+    try {
+        const res = await fetch(`${window.woosuiteData.apiUrl}/system-logs`, {
+            headers: { 'X-WP-Nonce': window.woosuiteData.nonce }
+        });
+        const data = await res.json();
+        if (data.logs) setLogs(data.logs);
+    } catch (e) {
+        console.error('Failed to fetch logs', e);
+    } finally {
+        setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+      if (activeTab === 'logs') {
+          fetchLogs();
+          const interval = setInterval(fetchLogs, 5000); // Auto-refresh logs
+          return () => clearInterval(interval);
+      }
+  }, [activeTab]);
 
   const handleTestConnection = async () => {
       if (!window.woosuiteData?.apiUrl) {
@@ -181,11 +209,37 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
                     >
                         Installation
                     </button>
+                     <button
+                        onClick={() => setActiveTab('logs')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'logs' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        System Logs
+                    </button>
                 </div>
             </div>
         </div>
 
-        {activeTab === 'general' ? (
+        {activeTab === 'logs' ? (
+            <div className="bg-gray-900 text-gray-300 rounded-xl shadow-lg border border-gray-800 overflow-hidden font-mono text-xs">
+                <div className="flex justify-between items-center p-4 bg-gray-800 border-b border-gray-700">
+                    <span className="font-bold text-gray-100 flex items-center gap-2">
+                        <FileCode size={16} /> System Logs (Last 50 Entries)
+                    </span>
+                    <button onClick={fetchLogs} disabled={loadingLogs} className="text-gray-400 hover:text-white transition">
+                        {loadingLogs ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />} Refresh
+                    </button>
+                </div>
+                <div className="p-4 h-96 overflow-y-auto space-y-1">
+                    {logs.length === 0 ? (
+                        <div className="text-gray-500 italic">No logs found. Run a process to see activity.</div>
+                    ) : (
+                        logs.map((log, i) => (
+                            <div key={i} className="border-b border-gray-800 pb-1 last:border-0">{log}</div>
+                        ))
+                    )}
+                </div>
+            </div>
+        ) : activeTab === 'general' ? (
             <>
                 <div className="flex justify-end gap-2 items-center">
                      {saveStatus === 'error' && (
