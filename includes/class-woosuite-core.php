@@ -37,8 +37,8 @@ class WooSuite_Core {
         // Load the LLM Txt class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-llm-txt.php';
 
-        // Load Gemini & SEO Worker
-        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-gemini.php';
+        // Load Groq & SEO Worker
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-groq.php';
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-seo-worker.php';
 
         // Load Security Scanner

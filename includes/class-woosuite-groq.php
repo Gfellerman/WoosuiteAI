@@ -1,0 +1,210 @@
+<?php
+
+class WooSuite_Groq {
+
+    private $api_key;
+    private $api_url = 'https://api.groq.com/openai/v1/chat/completions';
+
+    public function __construct() {
+        // We reuse the existing option key to preserve user input
+        // if they already pasted the Groq key into the 'Gemini' field.
+        $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
+
+        // TODO: REMOVE THIS KEY BEFORE PUBLIC RELEASE - FALLBACK FOR USER TESTING
+        // if ( empty( $this->api_key ) ) {
+        //     $this->api_key = 'gsk_...'; // User's key (redacted here as I don't have it in this session)
+        // }
+    }
+
+    public function test_connection() {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $body = array(
+            'model' => 'llama-3.1-8b-instant',
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => "Say 'Hello' if you can hear me."
+                )
+            ),
+            'max_tokens' => 10
+        );
+
+        return $this->call_api( $body, false ); // False = No JSON enforcement for test
+    }
+
+    public function generate_seo_meta( $item ) {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $context = "Type: {$item['type']}\nName: {$item['name']}\nDescription: {$item['description']}";
+        if ( isset( $item['price'] ) ) {
+            $context .= "\nPrice: {$item['price']}";
+        }
+
+        $rewrite_instruction = "";
+        $json_structure = "
+        {
+            \"title\": \"Max 60 chars meta title\",
+            \"description\": \"Max 160 chars meta description\",
+            \"llmSummary\": \"Concise summary for AI (max 50 words)\"
+        }";
+
+        if ( ! empty( $item['rewrite_title'] ) ) {
+            $rewrite_instruction = "4. simplifiedTitle: A clean, concise product name (max 6 words). Remove keyword stuffing. E.g., 'Modern Velvet Office Chair'.";
+            $json_structure = "
+            {
+                \"title\": \"Max 60 chars meta title\",
+                \"description\": \"Max 160 chars meta description\",
+                \"llmSummary\": \"Concise summary for AI (max 50 words)\",
+                \"simplifiedTitle\": \"Clean product name\"
+            }";
+        }
+
+        $prompt = "
+            You are an SEO expert. Generate metadata for this content.
+
+            $context
+
+            Instructions:
+            1. Title: Keyword rich, max 60 chars.
+            2. Description: Enticing, max 160 chars.
+            3. LLM Summary: Fact-dense, under 50 words.
+            $rewrite_instruction
+
+            Return strictly JSON matching this structure:
+            $json_structure
+        ";
+
+        $body = array(
+            'model' => 'llama-3.1-8b-instant',
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a helpful SEO assistant that outputs strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
+    public function generate_image_seo( $url, $filename ) {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        // Fetch image (Server Side) to convert to base64
+        $image_response = wp_remote_get( $url, array( 'timeout' => 20, 'sslverify' => false ) );
+        if ( is_wp_error( $image_response ) || wp_remote_retrieve_response_code( $image_response ) !== 200 ) {
+            return new WP_Error( 'image_fetch_error', 'Could not fetch image from server: ' . $url );
+        }
+
+        $image_data = wp_remote_retrieve_body( $image_response );
+        if ( empty( $image_data ) ) {
+            return new WP_Error( 'image_empty', 'Image data is empty.' );
+        }
+
+        $base64_data = base64_encode( $image_data );
+        $mime_type = wp_remote_retrieve_header( $image_response, 'content-type' ) ?: 'image/jpeg';
+        $data_url = "data:$mime_type;base64,$base64_data";
+
+        // Sanitize filename
+        $clean_filename = $filename;
+        if ( preg_match( '/^[a-zA-Z0-9]{10,}\./', $filename ) || preg_match( '/\d{10,}/', $filename ) ) {
+            $clean_filename = "Unknown (Ignore Filename)";
+        }
+
+        $prompt = "
+            Analyze this image. Context Filename: $clean_filename.
+
+            1. Alt Text: Specific, accessible description. Max 125 chars.
+            2. Title: Clean, descriptive title. IGNORE filename if random/gibberish.
+
+            Return strictly JSON: { \"altText\": \"...\", \"title\": \"...\" }
+        ";
+
+        $body = array(
+            'model' => 'llama-3.2-11b-vision-preview',
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => array(
+                        array(
+                            'type' => 'text',
+                            'text' => $prompt
+                        ),
+                        array(
+                            'type' => 'image_url',
+                            'image_url' => array(
+                                'url' => $data_url
+                            )
+                        )
+                    )
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
+    private function call_api( $body, $json_mode = true ) {
+        $response = wp_remote_post( $this->api_url, array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $this->api_key
+            ),
+            'body'    => json_encode( $body ),
+            'timeout' => 60
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $raw_body = wp_remote_retrieve_body( $response );
+
+        if ( $code === 429 ) {
+            return new WP_Error( 'rate_limit', 'Groq API Rate Limit Reached.' );
+        }
+
+        if ( $code !== 200 ) {
+            error_log('WooSuite Groq Error: ' . $raw_body);
+            return new WP_Error( 'api_error', 'Groq API Error: ' . $code . ' - ' . $raw_body );
+        }
+
+        $data = json_decode( $raw_body, true );
+
+        if ( empty( $data['choices'][0]['message']['content'] ) ) {
+            return new WP_Error( 'api_empty', 'No response content from Groq.' );
+        }
+
+        $content = $data['choices'][0]['message']['content'];
+
+        if ( $json_mode ) {
+            $json = json_decode( $content, true );
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                // Sometimes models add markdown backticks
+                $content = str_replace( array( '```json', '```' ), '', $content );
+                $json = json_decode( $content, true );
+
+                if ( json_last_error() !== JSON_ERROR_NONE ) {
+                     return new WP_Error( 'json_error', 'Invalid JSON from Groq: ' . $content );
+                }
+            }
+            return $json;
+        }
+
+        return array( 'status' => $code, 'raw_response' => $data, 'content' => $content );
+    }
+}
