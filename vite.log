@@ -12,3 +12,10 @@
 11:42:47 AM [vite] (client) page reload includes/class-woosuite-seo-worker.php
 11:43:06 AM [vite] (client) page reload includes/api/class-woosuite-api.php
 11:43:18 AM [vite] (client) hmr update /components/Settings.tsx, /index.css?direct, /index.css
+11:56:19 AM [vite] (client) page reload AGENTS.md
+11:56:36 AM [vite] (client) page reload BUILD_INSTRUCTIONS.md
+12:05:01 PM [vite] (client) page reload includes/class-woosuite-gemini.php
+12:05:22 PM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+12:09:06 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+12:11:49 PM [vite] (client) page reload temp_verify.html
+12:15:08 PM [vite] (client) page reload temp_verify.html

@@ -186,6 +186,11 @@ class WooSuite_Gemini {
         }
 
         $code = wp_remote_retrieve_response_code( $response );
+
+        if ( $code === 429 ) {
+            return new WP_Error( 'rate_limit', 'Gemini API Rate Limit Reached.' );
+        }
+
         if ( $code !== 200 ) {
             $error_msg = wp_remote_retrieve_body( $response );
             // Log for debugging

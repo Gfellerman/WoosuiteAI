@@ -175,6 +175,9 @@ class WooSuite_Seo_Worker {
         $result = $this->gemini->generate_seo_meta( $item );
 
         if ( is_wp_error( $result ) ) {
+            if ( $result->get_error_code() === 'rate_limit' ) {
+                throw new Exception( 'RATE_LIMIT_HIT' );
+            }
             throw new Exception( $result->get_error_message() );
         }
 
@@ -232,6 +235,9 @@ class WooSuite_Seo_Worker {
         $result = $this->gemini->generate_image_seo( $url, basename( $url ) );
 
         if ( is_wp_error( $result ) ) {
+             if ( $result->get_error_code() === 'rate_limit' ) {
+                 throw new Exception( 'RATE_LIMIT_HIT' );
+             }
              throw new Exception( $result->get_error_message() );
         }
 
