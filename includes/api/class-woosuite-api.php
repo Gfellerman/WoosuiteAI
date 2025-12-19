@@ -37,6 +37,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/system-logs', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_system_logs' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/content', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_content_items' ),
@@ -142,6 +148,11 @@ class WooSuite_Api {
             update_option( 'woosuite_login_max_retries', (int) $params['loginMaxRetries'] );
         }
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function get_system_logs( $request ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        return new WP_REST_Response( array( 'logs' => $logs ), 200 );
     }
 
     public function get_settings( $request ) {
@@ -465,9 +476,13 @@ class WooSuite_Api {
         update_option( 'woosuite_seo_batch_stop_signal', true );
         update_option( 'woosuite_seo_batch_status', array( 'status' => 'idle' ) );
 
-        // Clear failure flags so items can be retried
+        // Clear failure flags AND 'processed' timestamp so items can be retried
         $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_failed'" );
         $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_last_error'" );
+        $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_processed_at'" );
+
+        // Clear Logs
+        update_option( 'woosuite_debug_log', array() );
 
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Reset complete' ), 200 );
     }

@@ -9,3 +9,6 @@
   ➜  Network: http://192.168.0.2:3000/
 6:41:42 AM [vite] (client) page reload verify_settings_seo_fix.py
 6:44:03 AM [vite] (client) page reload workflow.md
+11:42:47 AM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+11:43:06 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+11:43:18 AM [vite] (client) hmr update /components/Settings.tsx, /index.css?direct, /index.css
