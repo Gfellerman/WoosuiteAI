@@ -102,7 +102,17 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
-        // Fetch image (Server Side) to convert to base64
+        // 1. Check Image Size (Prevent Memory Exhaustion)
+        // Limit to 4MB (Groq Vision Limit & PHP Memory Safety)
+        $head = wp_remote_head( $url, array( 'timeout' => 5, 'sslverify' => false ) );
+        if ( ! is_wp_error( $head ) ) {
+             $size = wp_remote_retrieve_header( $head, 'content-length' );
+             if ( $size && $size > 4194304 ) { // 4MB
+                 return new WP_Error( 'image_too_large', 'Image is too large for AI analysis (>4MB). Skipping.' );
+             }
+        }
+
+        // 2. Fetch image (Server Side) to convert to base64
         $image_response = wp_remote_get( $url, array( 'timeout' => 20, 'sslverify' => false ) );
         if ( is_wp_error( $image_response ) || wp_remote_retrieve_response_code( $image_response ) !== 200 ) {
             return new WP_Error( 'image_fetch_error', 'Could not fetch image from server: ' . $url );

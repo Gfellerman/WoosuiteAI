@@ -50,6 +50,9 @@ class WooSuite_Seo_Worker {
     }
 
     public function process_batch() {
+        // Cleanup stuck items (older than 10 mins)
+        $this->cleanup_stuck_items();
+
         if ( function_exists( 'set_time_limit' ) ) set_time_limit( 300 );
 
         if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
@@ -340,5 +343,22 @@ class WooSuite_Seo_Worker {
         ) );
 
         return $q1->found_posts + $q2->found_posts;
+    }
+
+    /**
+     * Resets items that have been stuck in 'processing' state for too long.
+     * This prevents the batch from hanging if a PHP process crashes.
+     */
+    private function cleanup_stuck_items() {
+        global $wpdb;
+        // 10 minutes = 600 seconds
+        $cutoff = time() - 600;
+
+        // Delete the processing flag for old items
+        // Note: meta_value is string, but we can compare numerically if it holds a timestamp
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_processed_at' AND meta_value < %d",
+            $cutoff
+        ) );
     }
 }

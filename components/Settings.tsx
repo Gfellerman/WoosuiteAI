@@ -13,7 +13,7 @@ const Settings: React.FC = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'general' | 'install' | 'logs'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'logs'>('general');
   const [copied, setCopied] = useState(false);
 
   // Logs State
@@ -139,61 +139,12 @@ const Settings: React.FC = () => {
       }
   };
 
-  const phpCode = `<?php
-/**
- * Plugin Name: WooSuite AI
- * Description: AI-powered SEO, Security, and Automation for WooCommerce.
- * Version: 1.0.0
- * Author: WooSuite AI Team
- */
-
-if (!defined('ABSPATH')) exit;
-
-function woosuite_ai_enqueue_scripts() {
-    // Load the React Build
-    wp_enqueue_script('woosuite-ai-app', plugins_url('/build/static/js/main.js', __FILE__), array('wp-element'), '1.0.0', true);
-    wp_enqueue_style('woosuite-ai-styles', plugins_url('/build/static/css/main.css', __FILE__), array(), '1.0.0');
-    
-    // Pass Data from PHP to React
-    wp_localize_script('woosuite-ai-app', 'woosuiteData', array(
-        'root' => esc_url_raw(rest_url()),
-        'nonce' => wp_create_nonce('wp_rest'),
-        'apiKey' => get_option('woosuite_gemini_api_key'),
-    ));
-}
-
-function woosuite_ai_menu_page() {
-    add_menu_page(
-        'WooSuite AI', 
-        'WooSuite AI', 
-        'manage_options', 
-        'woosuite-ai', 
-        'woosuite_ai_render_app', 
-        'dashicons-superhero', 
-        3
-    );
-}
-
-function woosuite_ai_render_app() {
-    echo '<div id="root"></div>';
-}
-
-add_action('admin_enqueue_scripts', 'woosuite_ai_enqueue_scripts');
-add_action('admin_menu', 'woosuite_ai_menu_page');
-?>`;
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(phpCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
         <div className="flex justify-between items-center border-b border-gray-200 pb-6">
             <div>
                 <h2 className="text-2xl font-bold text-gray-800">Plugin Settings</h2>
-                <p className="text-gray-500">Configure your API connections and installation options.</p>
+                <p className="text-gray-500">Configure your API connections and logs.</p>
             </div>
             <div className="flex gap-3">
                  <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
@@ -202,12 +153,6 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
                         className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'general' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         General
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('install')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'install' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                        Installation
                     </button>
                      <button
                         onClick={() => setActiveTab('logs')}
@@ -353,40 +298,7 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
                     </div>
                 </div>
             </>
-        ) : (
-            <div className="space-y-6">
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
-                    <h3 className="text-lg font-bold text-amber-800 mb-2">Integration Instructions</h3>
-                    <p className="text-amber-700 text-sm mb-4">
-                        This application is currently in <strong>Demo Mode</strong> running in a standalone React environment. 
-                        To install it on WordPress, follow these steps:
-                    </p>
-                    <ol className="list-decimal list-inside space-y-2 text-sm text-amber-800 font-medium">
-                        <li>Run <code className="bg-amber-100 px-1 rounded">npm run build</code> to compile this React app.</li>
-                        <li>Create a folder named <code className="bg-amber-100 px-1 rounded">woosuite-ai</code> in your WordPress <code className="bg-amber-100 px-1 rounded">wp-content/plugins</code> directory.</li>
-                        <li>Create a file named <code className="bg-amber-100 px-1 rounded">woosuite-ai.php</code> inside that folder and paste the code below.</li>
-                        <li>Copy the <code className="bg-amber-100 px-1 rounded">build</code> folder from this project into the plugin folder.</li>
-                    </ol>
-                </div>
-
-                <div className="bg-gray-900 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
-                    <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex justify-between items-center">
-                        <span className="text-gray-300 text-xs font-mono flex items-center gap-2">
-                            <FileCode size={14} /> woosuite-ai.php
-                        </span>
-                        <button 
-                            onClick={copyToClipboard}
-                            className="text-xs text-gray-300 hover:text-white flex items-center gap-1 transition"
-                        >
-                            {copied ? <Check size={14} /> : <Download size={14} />} {copied ? 'Copied' : 'Copy Code'}
-                        </button>
-                    </div>
-                    <pre className="p-4 text-xs font-mono text-green-400 overflow-x-auto">
-                        {phpCode}
-                    </pre>
-                </div>
-            </div>
-        )}
+        ) : null}
     </div>
   );
 };

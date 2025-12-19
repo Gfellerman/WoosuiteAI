@@ -3,7 +3,8 @@
 ## Completed
 - [x] **Architecture**: Switched AI Engine from Google Gemini to **Groq (Llama 3)** for better stability and speed.
 - [x] **SEO**: Implemented **Smart Throttling** (sleep 2s) to respect Groq Free Tier limits (30 RPM).
-- [x] **SEO**: Fixed "Batch Stops" issue by handling 429 Rate Limits gracefully (Pause & Auto-resume).
+- [x] **SEO**: Fixed "Batch Stops" issue by handling 429 Rate Limits gracefully AND recovering "Stuck Items" (older than 10 mins).
+- [x] **SEO**: Added 4MB size limit for Image Analysis to prevent crashes.
 - [x] **Settings**: Added native **Test Connection** button to React UI with immediate feedback.
 - [x] **Cleanup**: Removed legacy Gemini code and diagnostic test pages.
 - [x] **Security**: Implemented Deep Scan with regex patterns and Auto-Whitelist for trusted plugins.

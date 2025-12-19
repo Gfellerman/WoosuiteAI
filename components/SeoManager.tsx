@@ -684,8 +684,17 @@ const SeoManager: React.FC = () => {
                           <span className="font-medium text-gray-700">Enable Custom Sitemap</span>
                           <div className="bg-green-100 text-green-800 px-3 py-1 rounded text-sm font-medium">Active</div>
                       </div>
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-sm text-gray-600 font-mono">
-                          {homeUrl ? `${homeUrl}/sitemap.xml` : '/sitemap.xml'}
+                      <div className="bg-gray-50 p-3 rounded border border-gray-200 break-all text-sm text-gray-600 font-mono flex items-center justify-between">
+                          <span>{homeUrl ? `${homeUrl}/sitemap.xml` : '/sitemap.xml'}</span>
+                          <a
+                            href={homeUrl ? `${homeUrl}/sitemap.xml` : '/sitemap.xml'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-600 hover:text-purple-800"
+                            title="Open Sitemap"
+                          >
+                              <ExternalLink size={16} />
+                          </a>
                       </div>
                       <p className="text-xs text-gray-500">
                           This sitemap includes all Products, Posts, Pages, and Images. It is automatically added to your robots.txt.
