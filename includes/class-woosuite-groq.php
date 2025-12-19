@@ -97,6 +97,40 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function rewrite_content( $text, $type, $tone, $instructions = '' ) {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $prompt = "
+            Task: Rewrite the following $type.
+            Tone: $tone.
+            Extra Instructions: $instructions.
+
+            Original Text:
+            \"$text\"
+
+            Return strictly JSON: { \"rewritten\": \"...\" }
+        ";
+
+        $body = array(
+            'model' => 'llama-3.1-8b-instant',
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a professional content editor. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function generate_image_seo( $url, $filename ) {
         if ( empty( $this->api_key ) ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
