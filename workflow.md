@@ -11,6 +11,10 @@
 - [x] Settings: Added native "Test Connection" button to React UI and improved Save feedback.
 - [x] SEO: Added visual error reporting (Error badge in table) and alerts for single-item generation failures.
 - [x] SEO: Improved Batch stability by reducing loop time to 10s and adding `set_time_limit(0)`.
+- [x] SEO: Implemented **Smart Throttling** (6s delay) to respect Gemini Free Tier limits and prevent "freeze".
+- [x] SEO: Added **Test API** button directly in SEO Manager header.
+- [x] SEO: Fixed build artifact issue causing missing "Generate" button on Products tab.
+- [x] SEO: Added **System Logs** tab for backend debugging.
 
 ## In Progress / Planned
 - [ ] Security: Connect API endpoints for "Ignore" and "Quarantine" actions (currently UI only).
@@ -32,5 +36,5 @@
 - [x] SEO: Added `lastError` field to API response to enable frontend error debugging.
 
 ## Next Steps
-- [ ] Monitor user feedback on the "Connection Test" result (Success/Error code).
+- [ ] Monitor user feedback on the "Smart Throttling" (Is it too slow? Is it reliable?).
 - [ ] Verify if the Image SEO quality improves with the filename ignoring logic.
