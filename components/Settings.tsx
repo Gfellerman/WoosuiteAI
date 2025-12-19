@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Key, ShieldCheck, Zap, Download, FileCode, Check } from 'lucide-react';
+import { Save, Key, ShieldCheck, Zap, Download, FileCode, Check, Loader, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [systemKeyPresent, setSystemKeyPresent] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  // Save State
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
+
+  // Connection Test State
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const [activeTab, setActiveTab] = useState<'general' | 'install'>('general');
   const [copied, setCopied] = useState(false);
 
@@ -14,7 +22,7 @@ const Settings: React.FC = () => {
       setApiKey(window.woosuiteData.apiKey);
       setSystemKeyPresent(true);
     } else {
-        // Fallback to localStorage
+        // Fallback to localStorage for dev/demo mode
         const storedKey = localStorage.getItem('gemini_api_key');
         if (storedKey) setApiKey(storedKey);
 
@@ -25,6 +33,11 @@ const Settings: React.FC = () => {
   }, []);
 
   const handleSave = async () => {
+    setSaveStatus('saving');
+    setSaveError('');
+    setTestResult(null); // Clear previous test result
+
+    // Save locally (always useful for UI persistence)
     if (apiKey.trim()) {
         localStorage.setItem('gemini_api_key', apiKey.trim());
     } else {
@@ -34,7 +47,7 @@ const Settings: React.FC = () => {
     // Save to WordPress Backend
     if (window.woosuiteData?.apiUrl) {
         try {
-            await fetch(`${window.woosuiteData.apiUrl}/settings`, {
+            const res = await fetch(`${window.woosuiteData.apiUrl}/settings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -42,15 +55,60 @@ const Settings: React.FC = () => {
                 },
                 body: JSON.stringify({ apiKey: apiKey.trim() })
             });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: res.statusText }));
+                throw new Error(err.message || 'Server responded with an error');
+            }
+
             // Update the global key
             window.woosuiteData.apiKey = apiKey.trim();
-        } catch (e) {
+            setSaveStatus('success');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        } catch (e: any) {
             console.error('Failed to save settings to WordPress', e);
+            setSaveStatus('error');
+            setSaveError(e.message || 'Failed to save to database. Check console.');
         }
+    } else {
+        // Demo Mode (No backend)
+        setSaveStatus('success');
+        setTimeout(() => setSaveStatus('idle'), 3000);
     }
+  };
 
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleTestConnection = async () => {
+      if (!window.woosuiteData?.apiUrl) {
+          setTestResult({ success: false, message: 'Cannot test in Demo Mode (No API URL).' });
+          return;
+      }
+
+      setTestingConnection(true);
+      setTestResult(null);
+
+      try {
+          const res = await fetch(`${window.woosuiteData.apiUrl}/settings/test-connection`, {
+              method: 'POST',
+              headers: {
+                  'X-WP-Nonce': window.woosuiteData.nonce
+              }
+          });
+
+          const data = await res.json();
+
+          if (res.ok && data.success) {
+              setTestResult({ success: true, message: 'Connection Successful! Gemini API is reachable.' });
+          } else {
+              setTestResult({
+                  success: false,
+                  message: data.message || 'Connection Failed: Unknown Error'
+              });
+          }
+      } catch (e: any) {
+          setTestResult({ success: false, message: 'Network Error: ' + e.message });
+      } finally {
+          setTestingConnection(false);
+      }
   };
 
   const phpCode = `<?php
@@ -129,12 +187,26 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
 
         {activeTab === 'general' ? (
             <>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2 items-center">
+                     {saveStatus === 'error' && (
+                         <span className="text-red-600 text-sm font-medium flex items-center gap-1">
+                             <AlertTriangle size={16} /> {saveError || 'Save Failed'}
+                         </span>
+                     )}
                      <button 
                         onClick={handleSave}
-                        className="bg-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-purple-700 transition flex items-center gap-2"
+                        disabled={saveStatus === 'saving'}
+                        className={`px-6 py-2 rounded-lg font-medium transition flex items-center gap-2 text-white
+                            ${saveStatus === 'success' ? 'bg-green-600 hover:bg-green-700' :
+                              saveStatus === 'error' ? 'bg-red-600 hover:bg-red-700' :
+                              'bg-purple-600 hover:bg-purple-700'}`}
                     >
-                        <Save size={18} /> {saved ? 'Saved!' : 'Save Changes'}
+                        {saveStatus === 'saving' ? <Loader className="animate-spin" size={18} /> :
+                         saveStatus === 'success' ? <Check size={18} /> :
+                         <Save size={18} />}
+                        {saveStatus === 'saving' ? 'Saving...' :
+                         saveStatus === 'success' ? 'Saved to DB!' :
+                         'Save Changes'}
                     </button>
                 </div>
 
@@ -161,15 +233,36 @@ add_action('admin_menu', 'woosuite_ai_menu_page');
                                 />
                                 <Key className="absolute left-3 top-3 text-gray-400" size={16} />
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                Enter your personal API key from Google AI Studio. 
-                                {systemKeyPresent && <span className="text-green-600 ml-1 font-medium flex items-center inline-flex gap-1"><ShieldCheck size={10} /> System key detected as fallback.</span>}
-                            </p>
+                            <div className="flex justify-between items-start mt-2">
+                                <p className="text-xs text-gray-500">
+                                    Enter your personal API key from Google AI Studio.
+                                    {systemKeyPresent && <span className="text-green-600 ml-1 font-medium flex items-center inline-flex gap-1"><ShieldCheck size={10} /> System key detected.</span>}
+                                </p>
+                                <button
+                                    onClick={handleTestConnection}
+                                    disabled={testingConnection || !apiKey}
+                                    className="text-sm text-purple-600 font-medium hover:text-purple-800 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    {testingConnection ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />}
+                                    {testingConnection ? 'Testing...' : 'Test Connection'}
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Test Result Feedback */}
+                        {testResult && (
+                            <div className={`p-4 rounded-lg text-sm border flex items-start gap-3 ${testResult.success ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
+                                {testResult.success ? <CheckCircle size={18} className="mt-0.5" /> : <AlertTriangle size={18} className="mt-0.5" />}
+                                <div>
+                                    <div className="font-bold">{testResult.success ? 'Success' : 'Connection Failed'}</div>
+                                    <div>{testResult.message}</div>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-4 p-4 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
                             <Zap size={18} />
-                            <span>Your API Key is stored securely and used for all AI requests.</span>
+                            <span>Your API Key is stored securely in the database and used for all AI requests.</span>
                         </div>
                     </div>
                 </div>

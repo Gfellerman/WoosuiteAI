@@ -11,6 +11,7 @@ export interface ContentItem {
   metaTitle?: string;
   metaDescription?: string;
   llmSummary?: string;
+  lastError?: string;
 
   // Type specific
   price?: number;

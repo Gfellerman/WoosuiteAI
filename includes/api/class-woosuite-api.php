@@ -220,6 +220,7 @@ class WooSuite_Api {
                 'metaTitle' => get_post_meta( $post->ID, '_woosuite_meta_title', true ),
                 'metaDescription' => get_post_meta( $post->ID, '_woosuite_meta_description', true ),
                 'llmSummary' => get_post_meta( $post->ID, '_woosuite_llm_summary', true ),
+                'lastError' => get_post_meta( $post->ID, '_woosuite_seo_last_error', true ),
                 'type' => $type,
                 'permalink' => get_permalink( $post->ID )
             );
