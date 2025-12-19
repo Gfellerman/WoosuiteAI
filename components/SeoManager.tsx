@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2 } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2, RotateCw, AlertTriangle } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -42,6 +42,10 @@ const SeoManager: React.FC = () => {
       let interval: any;
       if (batchStatus?.status === 'running') {
           interval = setInterval(checkBatchStatus, 3000);
+      }
+      // If finished, refresh data once
+      if (batchStatus?.status === 'complete') {
+          fetchItems();
       }
       return () => clearInterval(interval);
   }, [batchStatus?.status]);
@@ -149,29 +153,41 @@ const SeoManager: React.FC = () => {
       const res = await fetch(`${apiUrl}/seo/generate/${item.id}`, {
            method: 'POST',
            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-           // Only send rewriteTitle if explicitly requested? For now, no implicit rewrite on single item.
            body: JSON.stringify({})
       });
 
-      if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data) {
-               const updates = mapResultToItem(json.data, item.type);
-               setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...updates } : p));
-          }
+      if (!res.ok) {
+           const err = await res.json().catch(() => ({ message: res.statusText }));
+           throw new Error(err.message || 'Server error');
       }
-    } catch (e) {
+
+      const json = await res.json();
+      if (json.success && json.data) {
+           const updates = mapResultToItem(json.data, item.type);
+           setItems(prev => prev.map(p => p.id === item.id ? { ...p, ...updates } : p));
+      } else {
+           throw new Error(json.message || 'Unknown error');
+      }
+
+    } catch (e: any) {
       console.error(e);
+      alert(`Generation Failed: ${e.message}`);
     } finally {
       setGenerating(null);
     }
   };
 
   const mapResultToItem = (result: any, type: ContentType) => {
+      const updates: any = { lastError: undefined }; // Clear error on success
       if (type === 'image') {
-          return { altText: result.altText, name: result.title };
+          updates.altText = result.altText;
+          updates.name = result.title;
+      } else {
+          updates.metaTitle = result.title;
+          updates.metaDescription = result.description;
+          updates.llmSummary = result.llmSummary;
       }
-      return { metaTitle: result.title, metaDescription: result.description, llmSummary: result.llmSummary };
+      return updates;
   };
 
   const handleClientBulkOptimize = async () => {
@@ -318,6 +334,9 @@ const SeoManager: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 pb-2">
+              <button onClick={() => fetchItems()} className="p-2 text-gray-500 hover:text-purple-600 transition" title="Refresh List">
+                  <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
+              </button>
               <button
                 onClick={() => setShowUnoptimized(!showUnoptimized)}
                 className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border transition
@@ -385,6 +404,14 @@ const SeoManager: React.FC = () => {
                 <td className="p-4 align-top w-1/6">
                   {/* Status Check Logic */}
                   {(() => {
+                      if (item.lastError) {
+                          return (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 cursor-help" title={item.lastError}>
+                              <AlertTriangle size={12} className="mr-1" /> Error
+                            </span>
+                          );
+                      }
+
                       const isOptimized = activeTab === 'image'
                         ? (item.altText && item.altText.length > 5)
                         : (item.metaDescription && item.metaDescription.length > 10);

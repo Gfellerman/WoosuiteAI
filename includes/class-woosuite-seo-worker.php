@@ -29,6 +29,8 @@ class WooSuite_Seo_Worker {
     }
 
     public function process_batch() {
+        if ( function_exists( 'set_time_limit' ) ) set_time_limit( 0 );
+
         if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
             $this->stop_batch("Process stopped by user.");
             return;
@@ -53,8 +55,8 @@ class WooSuite_Seo_Worker {
         $status['last_updated'] = time();
         update_option( 'woosuite_seo_batch_status', $status );
 
-        // Loop: Reduced time limit to 15s to be safe
-        while ( ( microtime( true ) - $start_time ) < 15 ) {
+        // Loop: Reduced time limit to 10s to be safe
+        while ( ( microtime( true ) - $start_time ) < 10 ) {
 
             // Double check stop signal inside loop
             if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {

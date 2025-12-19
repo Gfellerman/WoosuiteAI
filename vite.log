@@ -3,50 +3,9 @@
 > vite
 
 
-  VITE v6.4.1  ready in 238 ms
+  VITE v6.4.1  ready in 212 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://192.168.0.2:3000/
-8:06:36 AM [vite] (client) hmr update /App.tsx, /index.css?direct, /index.css
-8:07:27 AM [vite] (client) page reload verify_security.py
-8:29:41 AM [vite] (client) page reload includes/class-woosuite-activator.php
-8:29:49 AM [vite] (client) page reload includes/class-woosuite-deactivator.php
-8:30:05 AM [vite] (client) page reload includes/class-woosuite-security.php
-8:30:15 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-8:30:31 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
-8:31:21 AM [vite] (client) page reload workflow.md
-8:43:58 AM [vite] (client) page reload workflow.md
-8:44:19 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-8:44:31 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-8:44:45 AM [vite] (client) page reload includes/class-woosuite-admin.php
-9:24:58 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-9:25:35 AM [vite] (client) page reload includes/class-woosuite-core.php
-9:25:54 AM [vite] (client) page reload types.ts
-9:26:25 AM [vite] (client) hmr update /index.css?direct, /index.css, /components/SeoManager.tsx, /components/EmailAutomation.tsx, /components/OrderManager.tsx, /components/AiSearch.tsx
-9:27:29 AM [vite] (client) hmr update /App.tsx, /index.css?direct, /index.css
-9:28:13 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-9:28:52 AM [vite] (client) page reload workflow.md
-10:26:23 AM [vite] (client) page reload woosuite-ai.php
-10:29:42 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-10:29:55 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-10:30:57 AM [vite] (client) page reload workflow.md
-10:36:22 AM [vite] (client) page reload includes/class-woosuite-security.php
-10:36:30 AM [vite] (client) page reload includes/class-woosuite-admin.php
-10:36:39 AM [vite] (client) page reload types.ts
-10:36:48 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-11:18:54 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
-11:19:02 AM [vite] (client) page reload types.ts
-11:19:12 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-11:20:13 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-11:20:26 AM [vite] (client) page reload workflow.md
-11:52:04 AM [vite] (client) page reload includes/class-woosuite-admin.php
-11:52:09 AM [vite] (client) page reload includes/class-woosuite-core.php
-11:52:28 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-11:52:50 AM [vite] (client) page reload includes/class-woosuite-security.php
-11:53:44 AM [vite] (client) page reload types.ts
-11:55:46 AM [vite] (client) hmr update /components/SecurityHub.tsx, /index.css?direct, /index.css
-11:58:57 AM [vite] (client) page reload workflow.md
-4:03:24 AM [vite] (client) page reload includes/api/class-woosuite-api.php
-4:03:59 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
-4:04:28 AM [vite] (client) page reload includes/class-woosuite-core.php
-4:04:43 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+6:41:42 AM [vite] (client) page reload verify_settings_seo_fix.py
+6:44:03 AM [vite] (client) page reload workflow.md
