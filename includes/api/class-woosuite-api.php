@@ -92,52 +92,6 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
-        // Security - Ignore List
-        register_rest_route( $this->namespace, '/security/ignore', array(
-            'methods' => 'POST',
-            'callback' => array( $this, 'add_security_ignore' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-        register_rest_route( $this->namespace, '/security/ignore', array(
-            'methods' => 'GET',
-            'callback' => array( $this, 'get_security_ignore' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-        register_rest_route( $this->namespace, '/security/ignore/remove', array(
-            'methods' => 'POST',
-            'callback' => array( $this, 'remove_security_ignore' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-
-        // Security - Quarantine
-        register_rest_route( $this->namespace, '/security/quarantine', array(
-            'methods' => 'GET',
-            'callback' => array( $this, 'get_quarantined_files' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-        register_rest_route( $this->namespace, '/security/quarantine/move', array(
-            'methods' => 'POST',
-            'callback' => array( $this, 'move_to_quarantine' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-        register_rest_route( $this->namespace, '/security/quarantine/restore', array(
-            'methods' => 'POST',
-            'callback' => array( $this, 'restore_from_quarantine' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-        register_rest_route( $this->namespace, '/security/quarantine/delete', array(
-            'methods' => 'POST',
-            'callback' => array( $this, 'delete_from_quarantine' ),
-            'permission_callback' => array( $this, 'check_permission' ),
-        ) );
-
-
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
             'methods' => 'POST',
@@ -480,6 +434,11 @@ class WooSuite_Api {
         $params = $request->get_json_params();
         $rewrite = isset( $params['rewriteTitles'] ) && $params['rewriteTitles'] ? 'yes' : 'no';
         update_option( 'woosuite_seo_rewrite_titles', $rewrite );
+
+        // Reset failure flags to ensure we retry items that failed previously
+        global $wpdb;
+        $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_failed'" );
+        $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_last_error'" );
 
         if ( ! class_exists( 'WooSuite_Seo_Worker' ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );

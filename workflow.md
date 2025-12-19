@@ -26,3 +26,14 @@
 - [ ] Implement the "Actions" UI (Quarantine/Ignore) in the main Security Dashboard (React).
 - [ ] Verify Image SEO quality with real user data.
 - [ ] Add "High Security Mode" implementation.
+
+## Completed Tasks
+- [x] SEO: Fixed "It does not generate any now" by adding logic to `start_seo_batch` that clears the `_woosuite_seo_failed` flags, ensuring a fresh retry.
+- [x] SEO: Added anti-loop protection (try/catch) and specific error logging to the worker.
+- [x] Security: Added `DOING_CRON` bypass to Firewall to prevent it from blocking the SEO worker loopback requests.
+- [x] Diagnostic: Added "Connection Test" button via JS injection (fallback) and a dedicated Submenu Page to ensure visibility.
+- [x] Security: Removed unstable/incomplete Quarantine/Ignore API routes to prevent 500 errors.
+
+## Next Steps
+- [ ] Monitor user feedback on the "Connection Test" result (Success/Error code).
+- [ ] Verify if the Image SEO quality improves with the filename ignoring logic.

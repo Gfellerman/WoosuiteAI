@@ -123,6 +123,41 @@ class WooSuite_Admin {
             'apiUrl' => rest_url( 'woosuite/v1' ),
             'apiKey' => get_option( 'woosuite_gemini_api_key', '' )
         ));
+
+        // Inject Test Button if we are on the React App page
+        // This is a fallback in case the Submenu is missed or React build is old
+        wp_add_inline_script( $this->plugin_name, "
+            jQuery(document).ready(function($) {
+                // Wait for React to render Settings tab
+                // We use a simple interval to check for the Settings header
+                var checkSettings = setInterval(function() {
+                     var settingsHeader = $('h3:contains(\"Gemini API Configuration\")');
+                     if (settingsHeader.length > 0 && $('#injected-test-btn').length === 0) {
+                          var container = settingsHeader.closest('div').parent();
+                          var btn = $('<button type=\"button\" id=\"injected-test-btn\" class=\"button button-secondary\" style=\"margin-left:10px;\">Test API Connection</button>');
+                          settingsHeader.append(btn);
+
+                          btn.on('click', function() {
+                              $(this).text('Testing...').prop('disabled', true);
+                              $.ajax({
+                                    url: woosuiteData.apiUrl + '/settings/test-connection',
+                                    method: 'POST',
+                                    beforeSend: function(xhr) { xhr.setRequestHeader('X-WP-Nonce', woosuiteData.nonce); },
+                                    success: function(res) {
+                                        alert('SUCCESS: ' + res.message);
+                                        $('#injected-test-btn').text('Test Connection').prop('disabled', false);
+                                    },
+                                    error: function(xhr) {
+                                        var msg = xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText;
+                                        alert('ERROR: ' + msg);
+                                        $('#injected-test-btn').text('Test Connection').prop('disabled', false);
+                                    }
+                              });
+                          });
+                     }
+                }, 2000);
+            });
+        " );
 	}
 
     /**
