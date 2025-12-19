@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'seo' | 'security' | 'search' | 'orders' | 'email' | 'backups' | 'settings';
+export type ViewState = 'dashboard' | 'seo' | 'security' | 'search' | 'orders' | 'email' | 'backups' | 'settings' | 'content-enhancer';
 
 export type ContentType = 'product' | 'post' | 'page' | 'image';
 
@@ -12,6 +12,11 @@ export interface ContentItem {
   metaDescription?: string;
   llmSummary?: string;
   lastError?: string;
+
+  // Rewrite Proposals
+  proposedTitle?: string;
+  proposedDescription?: string;
+  proposedShortDescription?: string;
 
   // Type specific
   price?: number;

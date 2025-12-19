@@ -129,6 +129,19 @@ class WooSuite_Api {
             'callback' => array( $this, 'generate_content_item' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
+
+        // Content Rewrite Routes
+        register_rest_route( $this->namespace, '/content/rewrite', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'rewrite_content_item' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/content/apply', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'apply_content_rewrite' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
     }
 
     public function get_status( $request ) {
@@ -233,7 +246,10 @@ class WooSuite_Api {
                 'llmSummary' => get_post_meta( $post->ID, '_woosuite_llm_summary', true ),
                 'lastError' => get_post_meta( $post->ID, '_woosuite_seo_last_error', true ),
                 'type' => $type,
-                'permalink' => get_permalink( $post->ID )
+                'permalink' => get_permalink( $post->ID ),
+                'proposedTitle' => get_post_meta( $post->ID, '_woosuite_proposed_title', true ),
+                'proposedDescription' => get_post_meta( $post->ID, '_woosuite_proposed_description', true ),
+                'proposedShortDescription' => get_post_meta( $post->ID, '_woosuite_proposed_short_description', true ),
             );
 
             // Add Image specific data
@@ -332,6 +348,74 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( array( 'success' => true, 'data' => $result ), 200 );
+    }
+
+    public function rewrite_content_item( $request ) {
+        $params = $request->get_json_params();
+        $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
+        $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
+        $tone = isset( $params['tone'] ) ? sanitize_text_field( $params['tone'] ) : 'Professional';
+        $instructions = isset( $params['instructions'] ) ? sanitize_text_field( $params['instructions'] ) : '';
+
+        $post = get_post( $id );
+        if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
+
+        $text = '';
+        if ( $field === 'title' ) {
+            $text = $post->post_title;
+        } elseif ( $field === 'short_description' ) {
+            $text = $post->post_excerpt;
+        } else {
+            $text = $post->post_content;
+        }
+
+        if ( empty( $text ) ) {
+            // If empty, try to generate from other fields?
+            // For now, if empty, we can't rewrite. But we can generate from scratch?
+            // Let's assume rewrite needs source.
+            // Actually, if description is empty, maybe use title to generate it?
+            if ( $field === 'description' || $field === 'short_description' ) {
+                $text = $post->post_title; // Fallback to title as context
+            }
+        }
+
+        $groq = new WooSuite_Groq();
+        $result = $groq->rewrite_content( $text, $field, $tone, $instructions );
+
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        if ( ! empty( $result['rewritten'] ) ) {
+            update_post_meta( $id, '_woosuite_proposed_' . $field, wp_kses_post( $result['rewritten'] ) );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'rewritten' => $result['rewritten'] ), 200 );
+    }
+
+    public function apply_content_rewrite( $request ) {
+        $params = $request->get_json_params();
+        $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
+        $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
+
+        $proposed = get_post_meta( $id, '_woosuite_proposed_' . $field, true );
+        if ( empty( $proposed ) ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => 'No proposed content found' ), 400 );
+        }
+
+        $args = array( 'ID' => $id );
+        if ( $field === 'title' ) {
+            $args['post_title'] = $proposed;
+        } elseif ( $field === 'short_description' ) {
+            $args['post_excerpt'] = $proposed;
+        } else {
+            $args['post_content'] = $proposed;
+        }
+
+        wp_update_post( $args );
+        delete_post_meta( $id, '_woosuite_proposed_' . $field );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
     }
 
     public function get_stats( $request ) {

@@ -21,6 +21,13 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq A
     *   The prompt must STRICTLY ignore filenames if they appear random/alphanumeric.
     *   **Size Limit:** Images > 4MB must be skipped (return error) to prevent PHP memory exhaustion or API timeouts.
 
+## Content Enhancer Module
+*   **Workflow:** Non-destructive AI rewriting.
+    1.  Generate proposal -> Stores in `_woosuite_proposed_{field}` post meta.
+    2.  User reviews UI.
+    3.  User applies -> Updates actual post content/title and deletes proposed meta.
+*   **Endpoints:** `/content/rewrite` (Generation), `/content/apply` (Commit).
+
 ## Security Module Instructions
 *   **Scanner:** The Deep Scan uses a whitelist (`safe_slugs`) to skip trusted plugins.
 *   **Quarantine:** Suspicious files are moved to `wp-content/uploads/woosuite-quarantine/`.

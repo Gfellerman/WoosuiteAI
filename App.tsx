@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ViewState, Product, Order } from './types';
 import Dashboard from './components/Dashboard';
 import SeoManager from './components/SeoManager';
+import ContentEnhancer from './components/ContentEnhancer';
 import SecurityHub from './components/SecurityHub';
 import AiSearch from './components/AiSearch';
 import OrderManager from './components/OrderManager';
 import BackupManager from './components/BackupManager';
 import EmailAutomation from './components/EmailAutomation';
 import Settings from './components/Settings';
-import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X, PenTool } from 'lucide-react';
 
 // Initial Mock Data
 const initialProducts: Product[] = [];
@@ -101,6 +102,7 @@ const App: React.FC = () => {
           
           <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Features</div>
           <NavItem id="seo" label="AI SEO (GEO)" icon={Search} />
+          <NavItem id="content-enhancer" label="Content Enhancer" icon={PenTool} />
           <NavItem id="security" label="Security & Firewall" icon={Shield} />
           <NavItem id="email" label="Email & Marketing" icon={Mail} />
           <NavItem id="orders" label="Order Manager" icon={ShoppingBag} />
@@ -143,6 +145,7 @@ const App: React.FC = () => {
             <div className="max-w-6xl mx-auto">
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'seo' && <SeoManager />}
+                {view === 'content-enhancer' && <ContentEnhancer />}
                 {view === 'security' && <SecurityHub />}
                 {view === 'search' && <AiSearch products={products} />}
                 {view === 'orders' && <OrderManager orders={orders} />}

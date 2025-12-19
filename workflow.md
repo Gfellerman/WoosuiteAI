@@ -13,7 +13,7 @@
 - [x] **SEO**: Enhanced Image SEO prompt to ignore random filenames.
 
 ## In Progress / Planned
-- [ ] **Content**: Create a dedicated "Content Enhancer" module for rewriting Product Titles/Descriptions (separating it from SEO Meta generation).
+- [x] **Content**: Created **Content Enhancer** module for rewriting Product/Post Titles & Descriptions with Tone selection.
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
 - [ ] **Premium**: Plan for "Pro" version with higher limits or advanced models.
 
