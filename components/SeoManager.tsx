@@ -171,7 +171,8 @@ const SeoManager: React.FC = () => {
 
     } catch (e: any) {
       console.error(e);
-      alert(`Generation Failed: ${e.message}`);
+      // alert(`Generation Failed: ${e.message}`);
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, lastError: e.message } : p));
     } finally {
       setGenerating(null);
     }
