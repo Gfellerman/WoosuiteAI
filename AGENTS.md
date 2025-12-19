@@ -1,7 +1,7 @@
 # AGENTS.md - WooSuite AI
 
 ## Project Overview
-WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Gemini AI) and Security features.
+WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq AI) and Security features.
 
 ## Coding Standards
 *   **PHP:** Follow WordPress Coding Standards. Use strict types where possible.
@@ -9,11 +9,14 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Gemini
 *   **CSS:** Tailwind CSS v4. Always use `@import "tailwindcss";` in CSS files.
 *   **Build:** Use `npm run build` to generate assets in `assets/`.
 
-## SEO Module Instructions
-*   **Batch Process:** The SEO Worker (`includes/class-woosuite-seo-worker.php`) runs in background batches (15s limit).
-*   **Failure Handling:** Failed items MUST be marked with `_woosuite_seo_failed` to prevent loops, BUT specific error messages MUST be logged to `_woosuite_seo_last_error`.
-*   **Image SEO:** The Gemini prompt (`includes/class-woosuite-gemini.php`) must STRICTLY ignore filenames if they appear random/alphanumeric.
-*   **Reset:** The "Reset Batch" feature must clear the failure flags (`_woosuite_seo_failed`) from the database to allow retries.
+## SEO Module Instructions (Groq Engine)
+*   **Engine:** The plugin now uses **Groq** (Llama 3.1 8B Text, Llama 3.2 11B Vision) via `includes/class-woosuite-groq.php`.
+*   **Batch Process:** The SEO Worker (`includes/class-woosuite-seo-worker.php`) runs in background batches.
+*   **Rate Limiting:** Groq Free Tier has ~30 RPM. The worker MUST implementation **Smart Throttling** (`sleep(2)`) between requests.
+*   **Failure Handling:**
+    *   **Rate Limits (429):** Must pause the batch, NOT mark items as failed.
+    *   **Errors:** Genuine errors mark items with `_woosuite_seo_failed` and log the message to `_woosuite_seo_last_error`.
+*   **Image SEO:** The prompt must STRICTLY ignore filenames if they appear random/alphanumeric.
 
 ## Security Module Instructions
 *   **Scanner:** The Deep Scan uses a whitelist (`safe_slugs`) to skip trusted plugins.

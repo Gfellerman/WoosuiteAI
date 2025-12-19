@@ -1,40 +1,22 @@
 # WooSuite AI - Workflow
 
 ## Completed
-- [x] Security: Implemented Deep Scan with regex patterns.
-- [x] Security: Added Auto-Whitelist for trusted plugins (WooCommerce, Site Kit).
-- [x] Security: Added Quarantine UI and Logic (Files moved to uploads/woosuite-quarantine).
-- [x] SEO: Implemented Gemini-based metadata generation (Text & Image).
-- [x] SEO: Fixed "Fast but No Data" bug by adding robust error logging (`_woosuite_seo_last_error`).
-- [x] SEO: Enhanced Image SEO prompt to ignore random filenames.
-- [x] SEO: Fixed "Reset Batch" to clear failure flags for retrying.
-- [x] Settings: Added native "Test Connection" button to React UI and improved Save feedback.
-- [x] SEO: Added visual error reporting (Error badge in table) and alerts for single-item generation failures.
-- [x] SEO: Improved Batch stability by reducing loop time to 10s and adding `set_time_limit(0)`.
-- [x] SEO: Implemented **Smart Throttling** (6s delay) to respect Gemini Free Tier limits and prevent "freeze".
-- [x] SEO: Added **Test API** button directly in SEO Manager header.
-- [x] SEO: Fixed build artifact issue causing missing "Generate" button on Products tab.
-- [x] SEO: Added **System Logs** tab for backend debugging.
+- [x] **Architecture**: Switched AI Engine from Google Gemini to **Groq (Llama 3)** for better stability and speed.
+- [x] **SEO**: Implemented **Smart Throttling** (sleep 2s) to respect Groq Free Tier limits (30 RPM).
+- [x] **SEO**: Fixed "Batch Stops" issue by handling 429 Rate Limits gracefully (Pause & Auto-resume).
+- [x] **Settings**: Added native **Test Connection** button to React UI with immediate feedback.
+- [x] **Cleanup**: Removed legacy Gemini code and diagnostic test pages.
+- [x] **Security**: Implemented Deep Scan with regex patterns and Auto-Whitelist for trusted plugins.
+- [x] **Security**: Added Quarantine UI and Logic.
+- [x] **Settings**: Improved Save feedback and validation.
+- [x] **SEO**: Enhanced Image SEO prompt to ignore random filenames.
 
 ## In Progress / Planned
-- [ ] Security: Connect API endpoints for "Ignore" and "Quarantine" actions (currently UI only).
-- [ ] Dashboard: Add "Recent Activity" log widget.
+- [ ] **Content**: Create a dedicated "Content Enhancer" module for rewriting Product Titles/Descriptions (separating it from SEO Meta generation).
+- [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
+- [ ] **Premium**: Plan for "Pro" version with higher limits or advanced models.
 
-## Completed Tasks
-- [x] SEO Module: Fixed silent failure loop by marking failed items and logging specific errors.
-- [x] SEO Module: Implemented Image SEO filename cleaning to prevent garbage titles.
-- [x] SEO Module: Added "Reset Batch" functionality to clear failure flags.
-- [x] General: Added "Connection Test" diagnostic page to verify Gemini API status.
-- [x] Security: Reduced false positives by whitelisting trusted plugin directories (WooCommerce, Site Kit, etc).
-- [x] Security: Added Quarantine architecture (Folder creation + .htaccess).
-- [x] SEO: Fixed "It does not generate any now" by adding logic to `start_seo_batch` that clears the `_woosuite_seo_failed` flags, ensuring a fresh retry.
-- [x] SEO: Added anti-loop protection (try/catch) and specific error logging to the worker.
-- [x] Security: Added `DOING_CRON` bypass to Firewall to prevent it from blocking the SEO worker loopback requests.
-- [x] Diagnostic: Added "Connection Test" button via JS injection (fallback) and a dedicated Submenu Page to ensure visibility.
-- [x] Security: Removed unstable/incomplete Quarantine/Ignore API routes to prevent 500 errors.
-- [x] Settings: Fixed API Key saving issue (UI showing "Saved" when backend failed) by adding strict response validation.
-- [x] SEO: Added `lastError` field to API response to enable frontend error debugging.
-
-## Next Steps
-- [ ] Monitor user feedback on the "Smart Throttling" (Is it too slow? Is it reliable?).
-- [ ] Verify if the Image SEO quality improves with the filename ignoring logic.
+## Architecture Notes
+- **AI Engine**: Groq (Llama 3.1 8B for Text, Llama 3.2 11B for Vision).
+- **Throttling**: Worker sleeps 2s between requests to stay under 30 RPM.
+- **State**: Batch process uses `_woosuite_seo_processed_at` to track progress and prevent loops.
