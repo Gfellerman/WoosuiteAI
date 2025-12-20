@@ -104,7 +104,10 @@ const SeoManager: React.FC = () => {
           const res = await fetch(`${apiUrl}/seo/batch`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-              body: JSON.stringify({ rewriteTitles })
+              body: JSON.stringify({
+                  rewriteTitles,
+                  type: activeTab
+              })
           });
           if (res.ok) {
               await checkBatchStatus();
@@ -115,6 +118,11 @@ const SeoManager: React.FC = () => {
       } catch (e) {
           console.error("Failed to start batch", e);
       }
+  };
+
+  const resumeBatch = async () => {
+      // Resuming is effectively starting again, the worker handles the rest (skipping processed)
+      await startBackgroundBatch();
   };
 
   const stopBackgroundBatch = async () => {
@@ -259,8 +267,26 @@ const SeoManager: React.FC = () => {
       {batchStatus?.status !== 'idle' && batchStatus?.status !== 'running' && batchStatus?.status !== 'paused' && (
            <div className="bg-gray-100 rounded-lg p-3 flex justify-between items-center text-sm text-gray-600">
                <span>Process status: <strong>{batchStatus?.status}</strong></span>
-               <button onClick={resetBackgroundBatch} className="text-red-600 hover:underline text-xs">
-                   Force Reset Status
+               <div className="flex gap-3">
+                   <button onClick={resumeBatch} className="text-purple-600 hover:underline text-xs font-bold">
+                       Resume Process
+                   </button>
+                   <button onClick={resetBackgroundBatch} className="text-red-600 hover:underline text-xs">
+                       Force Reset Status
+                   </button>
+               </div>
+           </div>
+      )}
+
+      {/* Stuck Detection Banner */}
+      {batchStatus?.status === 'running' && (Date.now() / 1000 - batchStatus.last_updated > 120) && (
+           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex justify-between items-center text-sm text-amber-800 mb-4">
+               <div className="flex items-center gap-2">
+                   <AlertTriangle size={16} />
+                   <span>Process seems stuck (no updates for 2+ mins). WP Cron might be inactive.</span>
+               </div>
+               <button onClick={resumeBatch} className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1 rounded text-xs font-medium transition">
+                   Resume / Kickstart
                </button>
            </div>
       )}
@@ -547,8 +573,9 @@ const SeoManager: React.FC = () => {
                   <h3 className="text-xl font-bold mb-4">Start Optimization</h3>
                   <div className="space-y-4">
                       <p className="text-gray-600">
-                          This process will optimize all <strong>{totalItems}</strong> items in the background.
-                          It includes generating meta titles, descriptions, and AI summaries.
+                          This process will optimize all <strong>{totalItems}</strong> <span className="capitalize">{activeTab}s</span> in the background.
+                          <br/>
+                          {activeTab === 'product' && <span className="text-sm text-purple-600 font-medium">✨ Includes automatic optimization of Product Images!</span>}
                       </p>
 
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

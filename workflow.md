@@ -26,6 +26,9 @@
 - [x] **Filters**: Enhanced Category Filter to include Subcategories (`include_children`).
 - [x] **UI**: Added Pagination Controls (20/50/100/500 items) to both SEO Manager and Content Enhancer.
 - [x] **AI**: Boosted priority of "Extra Instructions" in prompts.
+- [x] **SEO Fix**: Restricted **Batch Scope** to active tab (Products vs Images) to prevent 40k item queues and crashes.
+- [x] **SEO Fix**: Implemented **Product-Context Image Optimization** (Images optimized inside Product loop) for better quality.
+- [x] **SEO UI**: Added **Resume** button and "Stuck Detection" for batch processes to handle WP Cron reliability.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

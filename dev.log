@@ -33,3 +33,7 @@
 4:08:51 PM [vite] (client) page reload verify_seo_pagination.py
 4:09:53 PM [vite] (client) page reload verify_seo_pagination.py
 4:09:59 PM [vite] (client) page reload workflow.md
+5:41:22 PM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+5:41:36 PM [vite] (client) page reload includes/api/class-woosuite-api.php
+5:41:55 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+5:46:47 PM [vite] (client) page reload workflow.md
