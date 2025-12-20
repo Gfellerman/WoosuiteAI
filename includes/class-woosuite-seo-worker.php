@@ -252,7 +252,9 @@ class WooSuite_Seo_Worker {
             }
 
             if ( taxonomy_exists( $taxonomy ) && ! empty( $tags ) ) {
-                wp_set_object_terms( $post->ID, $tags, $taxonomy, true ); // true = Append
+                // User requested to remove old tags and keep only enhanced ones.
+                // So we set append = false (replace).
+                wp_set_object_terms( $post->ID, $tags, $taxonomy, false );
                 $updates++;
             }
         }

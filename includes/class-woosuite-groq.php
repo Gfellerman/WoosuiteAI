@@ -113,7 +113,8 @@ class WooSuite_Groq {
         $prompt = "
             Task: Rewrite the following $type.
             $tone_instruction
-            Extra Instructions: $instructions.
+
+            CRITICAL USER DEMAND: $instructions
 
             Context (Product Name/Title): \"$context\"
 

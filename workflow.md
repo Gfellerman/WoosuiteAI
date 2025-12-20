@@ -23,6 +23,9 @@
 - [x] **AI**: Enforced **Strict Title Context** to prevent invalid descriptions.
 - [x] **SEO**: Implemented **Product Tags** generation and saving.
 - [x] **SEO**: Fixed "Changes Not Applied" by implementing **Auto-Save** for manual "Generate" actions.
+- [x] **Filters**: Enhanced Category Filter to include Subcategories (`include_children`).
+- [x] **UI**: Added Pagination Controls (20/50/100/500 items) to both SEO Manager and Content Enhancer.
+- [x] **AI**: Boosted priority of "Extra Instructions" in prompts.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

@@ -10,6 +10,7 @@ const SeoManager: React.FC = () => {
 
   // Pagination
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
@@ -52,7 +53,7 @@ const SeoManager: React.FC = () => {
 
   useEffect(() => {
     fetchItems();
-  }, [activeTab, page, showUnoptimized]);
+  }, [activeTab, page, showUnoptimized, limit]);
 
   const checkBatchStatus = async () => {
       if (!apiUrl) return;
@@ -71,7 +72,7 @@ const SeoManager: React.FC = () => {
     if (!apiUrl) return;
     setLoading(true);
     try {
-        let url = `${apiUrl}/content?type=${activeTab}&limit=20&page=${page}`;
+        let url = `${apiUrl}/content?type=${activeTab}&limit=${limit}&page=${page}`;
         if (showUnoptimized) {
             url += '&filter=unoptimized';
         }
@@ -503,8 +504,18 @@ const SeoManager: React.FC = () => {
         {/* Pagination Controls */}
         {!loading && items.length > 0 && (
             <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-                <div className="text-sm text-gray-500">
-                    Showing {items.length} of {totalItems} items
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <span>Showing {items.length} of {totalItems} items</span>
+                    <select
+                        value={limit}
+                        onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                        className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 outline-none bg-white"
+                    >
+                        <option value={20}>20 per page</option>
+                        <option value={50}>50 per page</option>
+                        <option value={100}>100 per page</option>
+                        <option value={500}>500 per page</option>
+                    </select>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
