@@ -235,7 +235,7 @@ class WooSuite_Api {
                     'taxonomy' => $taxonomy,
                     'field' => 'term_id',
                     'terms' => $category,
-                    'include_children' => false // Only main categories as requested
+                    'include_children' => true // Include subcategories as requested
                 )
             );
         }
@@ -429,7 +429,8 @@ class WooSuite_Api {
             }
 
             if ( taxonomy_exists( $taxonomy ) && ! empty( $tags ) ) {
-                wp_set_object_terms( $id, $tags, $taxonomy, true ); // true = Append
+                // User requested to remove old tags and keep only enhanced ones.
+                wp_set_object_terms( $id, $tags, $taxonomy, false ); // false = Replace
             }
         }
 

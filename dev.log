@@ -24,3 +24,12 @@
 3:39:38 PM [vite] (client) page reload includes/class-woosuite-seo-worker.php
 3:39:58 PM [vite] (client) page reload includes/api/class-woosuite-api.php
 3:40:36 PM [vite] (client) page reload workflow.md
+4:06:39 PM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+4:06:51 PM [vite] (client) page reload includes/api/class-woosuite-api.php
+4:07:14 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+4:07:18 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+4:07:25 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+4:07:36 PM [vite] (client) page reload includes/class-woosuite-groq.php
+4:08:51 PM [vite] (client) page reload verify_seo_pagination.py
+4:09:53 PM [vite] (client) page reload verify_seo_pagination.py
+4:09:59 PM [vite] (client) page reload workflow.md
