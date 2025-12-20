@@ -102,14 +102,25 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
+        $tone_instruction = "Tone: $tone.";
+        if ( stripos( $tone, 'Technical' ) !== false ) {
+            $tone_instruction .= " Use technical terminology, bullet points for specifications (if applicable), and concise, objective language. Focus on features and specs.";
+        }
+
         $prompt = "
             Task: Rewrite the following $type.
-            Tone: $tone.
+            $tone_instruction
             Extra Instructions: $instructions.
-            Context (Use this to understand what the content is about): \"$context\"
+
+            Context (Product Name/Title): \"$context\"
 
             Original Text:
             \"$text\"
+
+            CRITICAL VALIDATION:
+            The 'Original Text' might be incorrect or placeholder data (e.g. describing 'Fashion' for a 'USB Drive').
+            Always prioritize the 'Context' (Name) as the source of truth.
+            If the Original Text conflicts with the Context, IGNORE the Original Text and generate new content based on the Context.
 
             Return strictly JSON: { \"rewritten\": \"...\" }
         ";
@@ -119,7 +130,7 @@ class WooSuite_Groq {
             'messages' => array(
                 array(
                     'role' => 'system',
-                    'content' => 'You are a professional content editor. Output strictly JSON.'
+                    'content' => 'You are an expert technical copywriter. Output strictly JSON.'
                 ),
                 array(
                     'role' => 'user',

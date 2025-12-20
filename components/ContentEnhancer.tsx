@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { PenTool, Check, X, RefreshCw, Box, FileText, Layout, Play, RotateCcw, Save, Sparkles, Filter, ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import { PenTool, Check, X, RefreshCw, Box, FileText, Layout, Play, RotateCcw, Save, Sparkles, Filter, ChevronLeft, ChevronRight, Loader, Tag, List } from 'lucide-react';
 
 const ContentEnhancer: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
   const [activeField, setActiveField] = useState<'title' | 'description' | 'short_description'>('description');
   const [tone, setTone] = useState('Professional');
   const [instructions, setInstructions] = useState('');
+
+  // Filters & Limits
+  const [limit, setLimit] = useState(20);
+  const [category, setCategory] = useState<string>('');
+  const [status, setStatus] = useState<string>('all');
+  const [categories, setCategories] = useState<any[]>([]);
 
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -20,19 +26,43 @@ const ContentEnhancer: React.FC = () => {
   // Selection
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [isBulkApplying, setIsBulkApplying] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   const { apiUrl, nonce } = (window as any).woosuiteData || {};
 
   useEffect(() => {
+    fetchCategories();
+    setPage(1); // Reset page on tab change
+    setCategory(''); // Reset category on tab change
+  }, [activeTab]);
+
+  useEffect(() => {
     fetchItems();
-  }, [activeTab, page]);
+  }, [activeTab, page, limit, category, status]);
+
+  const fetchCategories = async () => {
+      if (!apiUrl) return;
+      try {
+          const res = await fetch(`${apiUrl}/content/categories?type=${activeTab}`, {
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              const data = await res.json();
+              setCategories(data);
+          }
+      } catch (e) { console.error(e); }
+  };
 
   const fetchItems = async () => {
     if (!apiUrl) return;
     setLoading(true);
     try {
-        const res = await fetch(`${apiUrl}/content?type=${activeTab}&limit=20&page=${page}`, {
+        let url = `${apiUrl}/content?type=${activeTab}&limit=${limit}&page=${page}`;
+        if (category) url += `&category=${category}`;
+        if (status !== 'all') url += `&status=${status}`;
+
+        const res = await fetch(url, {
             headers: { 'X-WP-Nonce': nonce }
         });
         if (res.ok) {
@@ -120,6 +150,25 @@ const ContentEnhancer: React.FC = () => {
       setSelectedIds([]);
   };
 
+  const handleBulkApply = async () => {
+      if (selectedIds.length === 0) return;
+      setIsBulkApplying(true);
+      try {
+          const res = await fetch(`${apiUrl}/content/bulk-apply`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ ids: selectedIds, field: activeField })
+          });
+          if (res.ok) {
+              const data = await res.json();
+              // alert(`Applied ${data.applied} changes.`);
+              fetchItems();
+          }
+      } catch (e) { console.error(e); }
+      setIsBulkApplying(false);
+      setSelectedIds([]);
+  };
+
   const toggleSelectAll = () => {
       if (selectedIds.length === items.length) setSelectedIds([]);
       else setSelectedIds(items.map(i => i.id));
@@ -133,18 +182,10 @@ const ContentEnhancer: React.FC = () => {
   };
 
   const getCurrentValue = (item: ContentItem) => {
-      // ContentItem doesn't explicitly store 'post_excerpt' as a separate field on interface except mapped?
-      // Wait, API get_content_items returns 'description' as strip_tags(excerpt ?: content).
-      // It doesn't return raw fields separately.
-      // I might need to rely on what I have.
-      // API Logic:
-      // 'description' => strip_tags( post_excerpt ?: post_content )
-      // 'name' => post_title.
-      // For 'short_description' (excerpt), do I have it?
-      // I should update API to return raw excerpt/content if needed.
-      // But for now, let's use what we have.
       if (activeField === 'title') return item.name;
-      return item.description; // This is a mix.
+      // Use explicit separate fields from new API
+      if (activeField === 'short_description') return (item as any).shortDescription;
+      return item.description;
   };
 
   return (
@@ -173,6 +214,7 @@ const ContentEnhancer: React.FC = () => {
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                 >
                     <option value="Professional">Professional</option>
+                    <option value="Technical">Technical</option>
                     <option value="Persuasive">Persuasive</option>
                     <option value="Casual">Casual</option>
                     <option value="Fun">Fun & Witty</option>
@@ -187,6 +229,34 @@ const ContentEnhancer: React.FC = () => {
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-40"
                 />
 
+                {/* Status Filter */}
+                <select
+                    value={status}
+                    onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700"
+                >
+                    <option value="all">All Status</option>
+                    <option value="enhanced">Enhanced (Pending)</option>
+                    <option value="not_enhanced">Not Enhanced</option>
+                </select>
+
+                {/* Category Filter */}
+                {categories.length > 0 && (
+                    <select
+                        value={category}
+                        onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700 max-w-[150px]"
+                    >
+                        <option value="">All Categories</option>
+                        {categories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
+                        ))}
+                    </select>
+                )}
+
+                <div className="h-6 w-px bg-gray-300 mx-1"></div>
+
+                {/* Bulk Actions */}
                 {isBulkProcessing ? (
                      <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
                         <RefreshCw size={16} className="animate-spin" />
@@ -197,8 +267,24 @@ const ContentEnhancer: React.FC = () => {
                         onClick={handleBulkRewrite}
                         disabled={selectedIds.length === 0}
                         className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 transition"
+                        title="Generate proposals for selected items"
                     >
-                        <Sparkles size={16} /> Rewrite Selected ({selectedIds.length})
+                        <Sparkles size={16} /> Rewrite ({selectedIds.length})
+                    </button>
+                )}
+
+                {isBulkApplying ? (
+                    <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <Loader size={16} className="animate-spin" /> Applying...
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleBulkApply}
+                        disabled={selectedIds.length === 0}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition"
+                        title="Apply proposed changes to selected items"
+                    >
+                        <Check size={16} /> Apply ({selectedIds.length})
                     </button>
                 )}
             </div>
@@ -321,11 +407,21 @@ const ContentEnhancer: React.FC = () => {
                 </table>
             )}
 
-            {/* Pagination (Simplified) */}
+            {/* Pagination */}
              {!loading && items.length > 0 && (
                 <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-                    <div className="text-sm text-gray-500">
-                        Showing {items.length} of {totalItems} items
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>Showing {items.length} of {totalItems} items</span>
+                        <select
+                            value={limit}
+                            onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                            className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 outline-none bg-white"
+                        >
+                            <option value={20}>20 per page</option>
+                            <option value={50}>50 per page</option>
+                            <option value={100}>100 per page</option>
+                            <option value={500}>500 per page</option>
+                        </select>
                     </div>
                     <div className="flex items-center gap-2">
                         <button

@@ -16,6 +16,11 @@
 - [x] **Security**: Added Quarantine UI and Logic.
 - [x] **Settings**: Improved Save feedback and validation.
 - [x] **SEO**: Enhanced Image SEO prompt to ignore random filenames.
+- [x] **Content Enhancer**: Added **Bulk Apply** and **Pagination** (up to 500 items).
+- [x] **Content Enhancer**: Implemented **Category Filtering** and **Status Filtering**.
+- [x] **Content Enhancer**: Fixed "Wrong Source Data" bug (separate Short/Long descriptions).
+- [x] **AI**: Implemented **Technical Tone** with specific prompt instructions.
+- [x] **AI**: Enforced **Strict Title Context** to prevent invalid descriptions (e.g., "Fashion" for "USB").
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

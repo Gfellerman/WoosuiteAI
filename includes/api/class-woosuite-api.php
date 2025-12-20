@@ -142,6 +142,18 @@ class WooSuite_Api {
             'callback' => array( $this, 'apply_content_rewrite' ),
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
+
+        register_rest_route( $this->namespace, '/content/bulk-apply', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'bulk_apply_content_rewrite' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/content/categories', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_categories' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
     }
 
     public function get_status( $request ) {
@@ -195,9 +207,11 @@ class WooSuite_Api {
 
     public function get_content_items( $request ) {
         $type = $request->get_param('type') ?: 'product';
-        $limit = $request->get_param('limit') ?: 50;
+        $limit = $request->get_param('limit') ?: 20;
         $page = $request->get_param('page') ?: 1;
         $filter = $request->get_param('filter'); // 'unoptimized' or empty
+        $category = $request->get_param('category');
+        $status = $request->get_param('status'); // 'enhanced', 'not_enhanced'
 
         $args = array(
             'posts_per_page' => $limit,
@@ -213,21 +227,56 @@ class WooSuite_Api {
             $args['post_type'] = $type; // post, page, product
         }
 
+        // Category Filter
+        if ( ! empty( $category ) ) {
+            $taxonomy = ($type === 'product') ? 'product_cat' : 'category';
+            $args['tax_query'] = array(
+                array(
+                    'taxonomy' => $taxonomy,
+                    'field' => 'term_id',
+                    'terms' => $category,
+                    'include_children' => false // Only main categories as requested
+                )
+            );
+        }
+
+        $meta_query = array();
+
         if ( $filter === 'unoptimized' ) {
             if ( $type === 'image' ) {
-                $args['meta_query'] = array(
+                $meta_query[] = array(
                     'relation' => 'OR',
                     array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' ),
                     array( 'key' => '_wp_attachment_image_alt', 'value' => '', 'compare' => '=' )
                 );
             } else {
-                // Text items
-                $args['meta_query'] = array(
+                $meta_query[] = array(
                     'relation' => 'OR',
                     array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
                     array( 'key' => '_woosuite_meta_description', 'value' => '', 'compare' => '=' )
                 );
             }
+        }
+
+        // Status Filter (Enhanced vs Not Enhanced)
+        if ( $status === 'enhanced' ) {
+            $meta_query[] = array(
+                'relation' => 'OR',
+                array( 'key' => '_woosuite_proposed_title', 'compare' => 'EXISTS' ),
+                array( 'key' => '_woosuite_proposed_description', 'compare' => 'EXISTS' ),
+                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'EXISTS' ),
+            );
+        } elseif ( $status === 'not_enhanced' ) {
+            $meta_query[] = array(
+                'relation' => 'AND',
+                array( 'key' => '_woosuite_proposed_title', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_woosuite_proposed_description', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'NOT EXISTS' ),
+            );
+        }
+
+        if ( ! empty( $meta_query ) ) {
+            $args['meta_query'] = $meta_query;
         }
 
         $query = new WP_Query( $args );
@@ -240,7 +289,12 @@ class WooSuite_Api {
             $item = array(
                 'id' => $post->ID,
                 'name' => $post->post_title,
-                'description' => strip_tags( $post->post_excerpt ?: $post->post_content ),
+                // Separate description fields explicitly
+                'description' => strip_tags( $post->post_content ),
+                'shortDescription' => $post->post_excerpt,
+                // Legacy support (fallback)
+                'fallbackDescription' => strip_tags( $post->post_excerpt ?: $post->post_content ),
+
                 'metaTitle' => get_post_meta( $post->ID, '_woosuite_meta_title', true ),
                 'metaDescription' => get_post_meta( $post->ID, '_woosuite_meta_description', true ),
                 'llmSummary' => get_post_meta( $post->ID, '_woosuite_llm_summary', true ),
@@ -255,11 +309,10 @@ class WooSuite_Api {
             // Add Image specific data
             if ( $type === 'image' ) {
                 $item['imageUrl'] = wp_get_attachment_url( $post->ID );
-                $item['permalink'] = $item['imageUrl']; // Use direct link for images
+                $item['permalink'] = $item['imageUrl'];
                 $item['altText'] = get_post_meta( $post->ID, '_wp_attachment_image_alt', true );
-                // Use caption for description if excerpt is empty
                 if ( empty( $item['description'] ) ) {
-                    $item['description'] = $post->post_excerpt;
+                    $item['description'] = $post->post_excerpt; // Caption
                 }
             } elseif ( $type === 'product' && function_exists( 'wc_get_product' ) ) {
                  $product = wc_get_product( $post->ID );
@@ -429,6 +482,65 @@ class WooSuite_Api {
         delete_post_meta( $id, '_woosuite_proposed_' . $field );
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function bulk_apply_content_rewrite( $request ) {
+        $params = $request->get_json_params();
+        $ids = isset( $params['ids'] ) ? $params['ids'] : array();
+        $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
+
+        if ( ! is_array( $ids ) || empty( $ids ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'No IDs provided' ), 400 );
+        }
+
+        $applied_count = 0;
+        foreach ( $ids as $id ) {
+            $id = intval( $id );
+            $proposed = get_post_meta( $id, '_woosuite_proposed_' . $field, true );
+
+            if ( ! empty( $proposed ) ) {
+                $args = array( 'ID' => $id );
+                if ( $field === 'title' ) {
+                    $args['post_title'] = $proposed;
+                } elseif ( $field === 'short_description' ) {
+                    $args['post_excerpt'] = $proposed;
+                } else {
+                    $args['post_content'] = $proposed;
+                }
+
+                wp_update_post( $args );
+                delete_post_meta( $id, '_woosuite_proposed_' . $field );
+                $applied_count++;
+            }
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'applied' => $applied_count ), 200 );
+    }
+
+    public function get_categories( $request ) {
+        $type = $request->get_param('type') ?: 'product';
+        $taxonomy = ($type === 'product') ? 'product_cat' : 'category';
+
+        $terms = get_terms( array(
+            'taxonomy' => $taxonomy,
+            'hide_empty' => false,
+            'parent' => 0 // Only main categories
+        ) );
+
+        if ( is_wp_error( $terms ) ) {
+            return new WP_REST_Response( array(), 200 );
+        }
+
+        $data = array();
+        foreach ( $terms as $term ) {
+            $data[] = array(
+                'id' => $term->term_id,
+                'name' => $term->name,
+                'count' => $term->count
+            );
+        }
+
+        return new WP_REST_Response( $data, 200 );
     }
 
     public function get_stats( $request ) {
