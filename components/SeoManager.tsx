@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2, RotateCw, AlertTriangle } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2, RotateCw, RotateCcw, AlertTriangle } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -17,10 +17,8 @@ const SeoManager: React.FC = () => {
   // Filters
   const [showUnoptimized, setShowUnoptimized] = useState(false);
 
-  // Bulk Optimization (Client Side - Selection)
+  // Bulk Optimization (Selection)
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [isClientBulkOptimizing, setIsClientBulkOptimizing] = useState(false);
-  const [clientBulkProgress, setClientBulkProgress] = useState({ current: 0, total: 0 });
 
   // Background Batch (Server Side)
   const [batchStatus, setBatchStatus] = useState<any>(null);
@@ -98,7 +96,7 @@ const SeoManager: React.FC = () => {
     }
   };
 
-  const startBackgroundBatch = async () => {
+  const startBackgroundBatch = async (ids: number[] = []) => {
       if (!apiUrl) return;
       try {
           const res = await fetch(`${apiUrl}/seo/batch`, {
@@ -106,7 +104,8 @@ const SeoManager: React.FC = () => {
               headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
               body: JSON.stringify({
                   rewriteTitles,
-                  type: activeTab
+                  type: activeTab,
+                  ids: ids
               })
           });
           if (res.ok) {
@@ -189,7 +188,7 @@ const SeoManager: React.FC = () => {
   };
 
   const mapResultToItem = (result: any, type: ContentType) => {
-      const updates: any = { lastError: undefined }; // Clear error on success
+      const updates: any = { lastError: undefined, hasHistory: true }; // Clear error, set history
       if (type === 'image') {
           updates.altText = result.altText;
           updates.name = result.title;
@@ -201,22 +200,24 @@ const SeoManager: React.FC = () => {
       return updates;
   };
 
-  const handleClientBulkOptimize = async () => {
+  const handleBulkOptimize = async () => {
       if (selectedIds.length === 0) return;
-      setIsClientBulkOptimizing(true);
-      setClientBulkProgress({ current: 0, total: selectedIds.length });
-
-      for (let i = 0; i < selectedIds.length; i++) {
-          const id = selectedIds[i];
-          const item = items.find(p => p.id === id);
-          if (item) {
-              await handleGenerate(item);
-          }
-          setClientBulkProgress(prev => ({ ...prev, current: i + 1 }));
-      }
-
-      setIsClientBulkOptimizing(false);
+      await startBackgroundBatch(selectedIds);
       setSelectedIds([]);
+  };
+
+  const handleRestore = async (item: ContentItem) => {
+      if (!confirm("Undo last changes?")) return;
+      try {
+          const res = await fetch(`${apiUrl}/content/restore`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ id: item.id, field: 'all' })
+          });
+          if (res.ok) {
+              fetchItems();
+          }
+      } catch (e) { console.error(e); }
   };
 
   const toggleSelectAllPage = () => {
@@ -314,20 +315,12 @@ const SeoManager: React.FC = () => {
 
             {/* Action Buttons */}
             {selectedIds.length > 0 ? (
-                // Client Side Bulk
-                isClientBulkOptimizing ? (
-                    <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                        <RefreshCw size={16} className="animate-spin" />
-                        Processing {clientBulkProgress.current}/{clientBulkProgress.total}
-                    </div>
-                ) : (
-                    <button
-                        onClick={handleClientBulkOptimize}
-                        className="px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 bg-purple-600 text-white hover:bg-purple-700"
-                    >
-                        <Sparkles size={16} /> Optimize Selected ({selectedIds.length})
-                    </button>
-                )
+                <button
+                    onClick={handleBulkOptimize}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 bg-purple-600 text-white hover:bg-purple-700"
+                >
+                    <Sparkles size={16} /> Optimize Selected ({selectedIds.length})
+                </button>
             ) : (
                 // Background Bulk Trigger
                 <button
@@ -447,18 +440,55 @@ const SeoManager: React.FC = () => {
                           );
                       }
 
-                      const isOptimized = activeTab === 'image'
-                        ? (item.altText && item.altText.length > 5)
-                        : (item.metaDescription && item.metaDescription.length > 10);
+                      const analysis = [];
+                      if (activeTab === 'image') {
+                          if (item.altText && item.altText.length > 5) analysis.push({ label: 'Alt Text Present', pass: true });
+                          else analysis.push({ label: 'Missing Alt Text', pass: false });
+                      } else {
+                          // Title Check
+                          if (item.metaTitle && item.metaTitle.length >= 30 && item.metaTitle.length <= 60) analysis.push({ label: 'Title Length (30-60)', pass: true });
+                          else if (item.metaTitle && item.metaTitle.length > 60) analysis.push({ label: 'Title too long (>60)', pass: false });
+                          else analysis.push({ label: 'Title too short or missing', pass: false });
 
-                      return isOptimized ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          <Check size={12} className="mr-1" /> Optimized
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          <AlertCircle size={12} className="mr-1" /> Missing
-                        </span>
+                          // Desc Check
+                          if (item.metaDescription && item.metaDescription.length >= 120 && item.metaDescription.length <= 160) analysis.push({ label: 'Meta Desc Length (120-160)', pass: true });
+                          else if (item.metaDescription && item.metaDescription.length > 160) analysis.push({ label: 'Meta Desc too long', pass: false });
+                          else analysis.push({ label: 'Meta Desc too short/missing', pass: false });
+                      }
+
+                      const isOptimized = analysis.every(a => a.pass);
+
+                      return (
+                        <div className="group relative flex items-center">
+                            {isOptimized ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 cursor-help">
+                                    <Check size={12} className="mr-1" /> Good
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 cursor-help">
+                                    <AlertCircle size={12} className="mr-1" /> Improvements
+                                </span>
+                            )}
+
+                            {/* Analysis Tooltip */}
+                            <div className="absolute left-0 top-full mt-2 w-64 bg-white border border-gray-200 shadow-xl rounded-lg p-3 z-50 hidden group-hover:block">
+                                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SEO Analysis</h4>
+                                <ul className="space-y-1">
+                                    {analysis.map((check, idx) => (
+                                        <li key={idx} className="flex items-start gap-2 text-xs">
+                                            {check.pass ? (
+                                                <Check size={12} className="text-green-500 mt-0.5" />
+                                            ) : (
+                                                <X size={12} className="text-red-500 mt-0.5" />
+                                            )}
+                                            <span className={check.pass ? 'text-gray-600' : 'text-red-600 font-medium'}>
+                                                {check.label}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
                       );
                   })()}
                 </td>
@@ -486,7 +516,7 @@ const SeoManager: React.FC = () => {
                   <div className="flex flex-col gap-2 items-end">
                     <button
                         onClick={() => handleGenerate(item)}
-                        disabled={generating === item.id || isClientBulkOptimizing}
+                        disabled={generating === item.id}
                         className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-sm font-medium transition w-full
                             ${generating === item.id
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -500,6 +530,15 @@ const SeoManager: React.FC = () => {
                         )}
                         Generate
                     </button>
+
+                    {item.hasHistory && (
+                        <button
+                            onClick={() => handleRestore(item)}
+                            className="text-xs text-gray-500 hover:text-red-600 flex items-center justify-center gap-1 mt-1 w-full"
+                        >
+                            <RotateCcw size={12} /> Undo
+                        </button>
+                    )}
 
                     {item.permalink && activeTab !== 'image' && (
                     <a

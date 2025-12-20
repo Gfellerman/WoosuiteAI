@@ -133,6 +133,20 @@ const ContentEnhancer: React.FC = () => {
       } catch (e) { console.error(e); }
   };
 
+  const handleRestore = async (item: ContentItem) => {
+      if (!confirm("Revert this item to its previous state?")) return;
+      try {
+          const res = await fetch(`${apiUrl}/content/restore`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ id: item.id, field: activeField })
+          });
+          if (res.ok) {
+              fetchItems();
+          }
+      } catch (e) { console.error(e); }
+  };
+
   const handleBulkRewrite = async () => {
       if (selectedIds.length === 0) return;
       setIsBulkProcessing(true);
@@ -294,8 +308,6 @@ const ContentEnhancer: React.FC = () => {
         <div className="flex gap-2 border-b border-gray-200">
             {[
                 { id: 'product', label: 'Products', icon: Box },
-                { id: 'post', label: 'Posts', icon: FileText },
-                { id: 'page', label: 'Pages', icon: Layout },
             ].map(tab => (
                 <button
                     key={tab.id}
@@ -386,14 +398,26 @@ const ContentEnhancer: React.FC = () => {
                                                     </button>
                                                 </>
                                             ) : (
-                                                <button
-                                                    onClick={() => handleRewrite(item)}
-                                                    disabled={generating === item.id}
-                                                    className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 w-full flex items-center justify-center gap-1"
-                                                >
-                                                    {generating === item.id ? <Loader className="animate-spin" size={12} /> : <Sparkles size={12} />}
-                                                    Rewrite
-                                                </button>
+                                                <>
+                                                    <button
+                                                        onClick={() => handleRewrite(item)}
+                                                        disabled={generating === item.id}
+                                                        className="bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 w-full flex items-center justify-center gap-1"
+                                                    >
+                                                        {generating === item.id ? <Loader className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                                                        Rewrite
+                                                    </button>
+
+                                                    {item.hasHistory && (
+                                                        <button
+                                                            onClick={() => handleRestore(item)}
+                                                            className="text-xs text-gray-500 hover:text-red-600 flex items-center justify-center gap-1 mt-1 w-full"
+                                                            title="Revert to previous version"
+                                                        >
+                                                            <RotateCcw size={12} /> Undo
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </td>

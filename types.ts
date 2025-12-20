@@ -22,6 +22,7 @@ export interface ContentItem {
   price?: number;
   imageUrl?: string;
   altText?: string;
+  hasHistory?: boolean;
 }
 
 // Alias for backward compatibility

@@ -301,6 +301,16 @@ class WooSuite_Seo_Worker {
 
         $image_ids = array_unique( array_filter( $image_ids ) );
 
+        // Prepare Text Context (Avoid Vision API for speed/stability)
+        $product_desc = '';
+        if ( function_exists( 'wc_get_product' ) ) {
+            $product = wc_get_product( $product_id );
+            if ( $product ) {
+                $product_desc = strip_tags( $product->get_short_description() ?: $product->get_description() );
+            }
+        }
+        $context = array( 'name' => $product_name, 'description' => $product_desc );
+
         foreach ( $image_ids as $img_id ) {
             // Skip if already optimized
             if ( get_post_meta( $img_id, '_wp_attachment_image_alt', true ) ) {
@@ -313,15 +323,11 @@ class WooSuite_Seo_Worker {
             $this->log( "Optimizing Product Image ID {$img_id} for Product: {$product_name}" );
 
             try {
-                // Pass Product Name as context to avoid "gibberish" or random filename issues
-                // We artificially inject the product name into the "filename" param for the prompt context
-                $context_name = "Product: $product_name";
-
                 $url = wp_get_attachment_url( $img_id );
                 if ( ! $url ) continue;
 
-                // Use Groq Vision
-                $result = $this->groq->generate_image_seo( $url, $context_name );
+                // Use Text-Based Generation (Passed Context)
+                $result = $this->groq->generate_image_seo( $url, $product_name, $context );
 
                 if ( ! is_wp_error( $result ) && ! empty( $result['altText'] ) ) {
                     update_post_meta( $img_id, '_wp_attachment_image_alt', sanitize_text_field( $result['altText'] ) );
@@ -431,6 +437,18 @@ class WooSuite_Seo_Worker {
             );
         }
 
+        // Apply Selection Filter (Specific IDs)
+        if ( ! empty( $filters['ids'] ) && is_array( $filters['ids'] ) ) {
+            $args['post__in'] = $filters['ids'];
+            // If IDs are provided, we MIGHT ignore 'processed' checks?
+            // No, user probably wants to optimize selected items that NEED optimization.
+            // If they are already done, we skip.
+            // But if they force 'Optimize Selected', maybe they want to redo?
+            // The UI usually filters for 'unoptimized' or assumes user knows.
+            // Currently meta_query excludes processed. So re-selecting optimized items won't do anything unless we clear meta first.
+            // I'll stick to 'unoptimized' logic for safety.
+        }
+
         $args['meta_query'] = $meta_query;
 
         return get_posts( $args );
@@ -471,6 +489,10 @@ class WooSuite_Seo_Worker {
                     'include_children' => true
                 )
             );
+        }
+
+        if ( ! empty( $filters['ids'] ) && is_array( $filters['ids'] ) ) {
+            $args['post__in'] = $filters['ids'];
         }
 
         $args['meta_query'] = $meta_query;

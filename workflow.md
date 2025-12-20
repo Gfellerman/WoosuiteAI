@@ -29,6 +29,10 @@
 - [x] **SEO Fix**: Restricted **Batch Scope** to active tab (Products vs Images) to prevent 40k item queues and crashes.
 - [x] **SEO Fix**: Implemented **Product-Context Image Optimization** (Images optimized inside Product loop) for better quality.
 - [x] **SEO UI**: Added **Resume** button and "Stuck Detection" for batch processes to handle WP Cron reliability.
+- [x] **Enhancement**: Implemented **Undo/Rollback** system for SEO and Content Enhancer with `save_history` backend logic.
+- [x] **UI**: Restricted Content Enhancer to **Products Only** (removed Posts/Pages tabs) per user request.
+- [x] **UI**: Added detailed **SEO Analysis Tooltip** visualizing Title/Meta Desc length checks and Alt Text presence.
+- [x] **Persistence**: "Optimize Selected" now triggers robust background worker instead of fragile client-side loop.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
@@ -38,3 +42,4 @@
 - **AI Engine**: Groq (Llama 3.1 8B for Text, Llama 3.2 11B for Vision).
 - **Throttling**: Worker sleeps 2s between requests to stay under 30 RPM.
 - **State**: Batch process uses `_woosuite_seo_processed_at` to track progress and prevent loops.
+- **History**: Content changes are stored in `_woosuite_seo_history_title`, `_desc`, `_meta` to allow rollback.
