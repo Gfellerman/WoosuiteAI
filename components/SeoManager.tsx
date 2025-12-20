@@ -27,9 +27,6 @@ const SeoManager: React.FC = () => {
   const [showStartModal, setShowStartModal] = useState(false);
   const [rewriteTitles, setRewriteTitles] = useState(false);
 
-  // Connection Test
-  const [testingConnection, setTestingConnection] = useState(false);
-
   // Sitemap
   const [showSitemapModal, setShowSitemapModal] = useState(false);
 
@@ -40,10 +37,10 @@ const SeoManager: React.FC = () => {
       checkBatchStatus();
   }, []);
 
-  // Poll when running
+  // Poll when running or paused
   useEffect(() => {
       let interval: any;
-      if (batchStatus?.status === 'running') {
+      if (batchStatus?.status === 'running' || batchStatus?.status === 'paused') {
           interval = setInterval(checkBatchStatus, 3000);
       }
       // If finished, refresh data once
@@ -144,28 +141,6 @@ const SeoManager: React.FC = () => {
       } catch (e) { console.error(e); }
   };
 
-  const testConnection = async () => {
-    if (!apiUrl) return;
-    setTestingConnection(true);
-    try {
-        const res = await fetch(`${apiUrl}/settings/test-connection`, {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': nonce }
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-            // Check if we can detect quota issues from the raw response
-            alert("Connection Successful! Gemini API is responding.");
-        } else {
-            alert("Connection Failed:\n" + (data.message || "Unknown Error"));
-        }
-    } catch (e: any) {
-        alert("Connection Error: " + e.message);
-    } finally {
-        setTestingConnection(false);
-    }
-  };
-
   const handleTabChange = (tab: ContentType) => {
       if (tab === activeTab) return;
       setActiveTab(tab);
@@ -247,13 +222,19 @@ const SeoManager: React.FC = () => {
     <div className="space-y-6">
 
       {/* Background Process Banner */}
-      {batchStatus?.status === 'running' && (
-          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg p-4 text-white shadow-md flex items-center justify-between">
+      {(batchStatus?.status === 'running' || batchStatus?.status === 'paused') && (
+          <div className={`rounded-lg p-4 text-white shadow-md flex items-center justify-between ${batchStatus.status === 'paused' ? 'bg-amber-500' : 'bg-gradient-to-r from-purple-500 to-indigo-600'}`}>
               <div className="flex items-center gap-3">
-                  <RefreshCw className="animate-spin" />
+                  {batchStatus.status === 'paused' ? <Loader className="animate-spin" /> : <RefreshCw className="animate-spin" />}
                   <div>
-                      <div className="font-bold">Background Optimization Running</div>
-                      <div className="text-sm opacity-90">WooSuite AI is optimizing {batchStatus.total} items in the background.</div>
+                      <div className="font-bold">
+                          {batchStatus.status === 'paused' ? 'Optimization Paused (Rate Limit)' : 'Background Optimization Running'}
+                      </div>
+                      <div className="text-sm opacity-90">
+                          {batchStatus.status === 'paused'
+                            ? 'Hit API limit. Auto-resuming in ~60 seconds...'
+                            : `WooSuite AI is optimizing ${batchStatus.total} items in the background.`}
+                      </div>
                   </div>
               </div>
               <div className="flex gap-2">
@@ -274,7 +255,7 @@ const SeoManager: React.FC = () => {
       )}
 
       {/* Force Reset Banner (If stuck or stopped) */}
-      {batchStatus?.status !== 'idle' && batchStatus?.status !== 'running' && (
+      {batchStatus?.status !== 'idle' && batchStatus?.status !== 'running' && batchStatus?.status !== 'paused' && (
            <div className="bg-gray-100 rounded-lg p-3 flex justify-between items-center text-sm text-gray-600">
                <span>Process status: <strong>{batchStatus?.status}</strong></span>
                <button onClick={resetBackgroundBatch} className="text-red-600 hover:underline text-xs">
@@ -290,15 +271,6 @@ const SeoManager: React.FC = () => {
             <p className="text-gray-500">Optimize for Traditional Search (Google, Bing) and AI Search (ChatGPT, Gemini).</p>
         </div>
         <div className="flex gap-2">
-            <button
-                onClick={testConnection}
-                disabled={testingConnection}
-                className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2"
-            >
-                {testingConnection ? <RefreshCw size={16} className="animate-spin" /> : <Settings size={16} />}
-                Test API
-            </button>
-
             <button
                 onClick={() => setShowSitemapModal(true)}
                 className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
@@ -333,15 +305,15 @@ const SeoManager: React.FC = () => {
                 // Background Bulk Trigger
                 <button
                     onClick={() => setShowStartModal(true)}
-                    disabled={batchStatus?.status === 'running'}
+                    disabled={batchStatus?.status === 'running' || batchStatus?.status === 'paused'}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border
-                        ${batchStatus?.status === 'running'
+                        ${(batchStatus?.status === 'running' || batchStatus?.status === 'paused')
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
                             : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
                         }`}
                 >
-                    {batchStatus?.status === 'running' ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
-                    Optimize All Content
+                    {(batchStatus?.status === 'running' || batchStatus?.status === 'paused') ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+                    {batchStatus?.status === 'paused' ? 'Resuming...' : 'Optimize All Content'}
                 </button>
             )}
         </div>
@@ -617,8 +589,8 @@ const SeoManager: React.FC = () => {
 
                    <div className="space-y-4">
                        <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-full ${batchStatus.status === 'running' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
-                                {batchStatus.status === 'running' ? <RefreshCw className="animate-spin" size={24} /> : <Check size={24} />}
+                            <div className={`p-3 rounded-full ${batchStatus.status === 'running' ? 'bg-purple-100 text-purple-600' : batchStatus.status === 'paused' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
+                                {batchStatus.status === 'running' ? <RefreshCw className="animate-spin" size={24} /> : batchStatus.status === 'paused' ? <Loader className="animate-spin" size={24} /> : <Check size={24} />}
                             </div>
                             <div>
                                 <div className="font-semibold text-gray-900 capitalize">{batchStatus.status}</div>

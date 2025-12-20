@@ -97,7 +97,7 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
-    public function rewrite_content( $text, $type, $tone, $instructions = '' ) {
+    public function rewrite_content( $text, $type, $tone, $instructions = '', $context = '' ) {
         if ( empty( $this->api_key ) ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
@@ -106,6 +106,7 @@ class WooSuite_Groq {
             Task: Rewrite the following $type.
             Tone: $tone.
             Extra Instructions: $instructions.
+            Context (Use this to understand what the content is about): \"$context\"
 
             Original Text:
             \"$text\"
