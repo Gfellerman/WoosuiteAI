@@ -143,6 +143,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/content/restore', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'restore_content_item' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/content/bulk-apply', array(
             'methods' => 'POST',
             'callback' => array( $this, 'bulk_apply_content_rewrite' ),
@@ -304,6 +310,9 @@ class WooSuite_Api {
                 'proposedTitle' => get_post_meta( $post->ID, '_woosuite_proposed_title', true ),
                 'proposedDescription' => get_post_meta( $post->ID, '_woosuite_proposed_description', true ),
                 'proposedShortDescription' => get_post_meta( $post->ID, '_woosuite_proposed_short_description', true ),
+                'hasHistory' => ! empty( get_post_meta( $post->ID, '_woosuite_history_post_content', true ) ) ||
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history__woosuite_meta_description', true ) ) ||
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history__wp_attachment_image_alt', true ) )
             );
 
             // Add Image specific data
@@ -339,9 +348,11 @@ class WooSuite_Api {
 
         // Update Meta (Common)
         if ( isset( $params['metaTitle'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_meta_title' );
             update_post_meta( $id, '_woosuite_meta_title', sanitize_text_field( $params['metaTitle'] ) );
         }
         if ( isset( $params['metaDescription'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_meta_description' );
             update_post_meta( $id, '_woosuite_meta_description', sanitize_text_field( $params['metaDescription'] ) );
 
             // Sync with Yoast/RankMath
@@ -349,16 +360,21 @@ class WooSuite_Api {
             update_post_meta( $id, 'rank_math_description', sanitize_text_field( $params['metaDescription'] ) );
         }
         if ( isset( $params['llmSummary'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_llm_summary' );
             update_post_meta( $id, '_woosuite_llm_summary', sanitize_textarea_field( $params['llmSummary'] ) );
         }
 
         // Image Specific
         if ( isset( $params['altText'] ) ) {
+            $this->save_meta_history( $id, '_wp_attachment_image_alt' );
             update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $params['altText'] ) );
         }
 
-        // Update Title (Standard WP Post Title) - Useful for renaming images/posts
+        // Update Title (Standard WP Post Title)
         if ( isset( $params['title'] ) ) {
+             // Save history for native fields logic is custom
+             update_post_meta( $id, '_woosuite_history_post_title', $post->post_title );
+
              $post_update = array(
                 'ID' => $id,
                 'post_title' => sanitize_text_field( $params['title'] )
@@ -404,10 +420,12 @@ class WooSuite_Api {
         // This ensures that "Generate" actions in the UI are persistent.
 
         if ( ! empty( $result['title'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_meta_title' );
             update_post_meta( $id, '_woosuite_meta_title', sanitize_text_field( $result['title'] ) );
         }
 
         if ( ! empty( $result['description'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_meta_description' );
             $desc = sanitize_text_field( $result['description'] );
             update_post_meta( $id, '_woosuite_meta_description', $desc );
             update_post_meta( $id, '_yoast_wpseo_metadesc', $desc );
@@ -415,6 +433,7 @@ class WooSuite_Api {
         }
 
         if ( ! empty( $result['llmSummary'] ) ) {
+            $this->save_meta_history( $id, '_woosuite_llm_summary' );
             update_post_meta( $id, '_woosuite_llm_summary', sanitize_textarea_field( $result['llmSummary'] ) );
         }
 
@@ -446,6 +465,11 @@ class WooSuite_Api {
 
         $post = get_post( $id );
         if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
+
+        // Strict Product Only for Content Enhancer
+        if ( $post->post_type !== 'product' ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Only products are supported for rewriting.' ), 400 );
+        }
 
         $text = '';
         $context = '';
@@ -498,6 +522,9 @@ class WooSuite_Api {
         $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
         $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
 
+        $post = get_post($id);
+        if (!$post) return new WP_REST_Response(array('success' => false, 'message' => 'Not found'), 404);
+
         $proposed = get_post_meta( $id, '_woosuite_proposed_' . $field, true );
         if ( empty( $proposed ) ) {
              return new WP_REST_Response( array( 'success' => false, 'message' => 'No proposed content found' ), 400 );
@@ -505,10 +532,13 @@ class WooSuite_Api {
 
         $args = array( 'ID' => $id );
         if ( $field === 'title' ) {
+            update_post_meta( $id, '_woosuite_history_post_title', $post->post_title );
             $args['post_title'] = $proposed;
         } elseif ( $field === 'short_description' ) {
+            update_post_meta( $id, '_woosuite_history_post_excerpt', $post->post_excerpt );
             $args['post_excerpt'] = $proposed;
         } else {
+            update_post_meta( $id, '_woosuite_history_post_content', $post->post_content );
             $args['post_content'] = $proposed;
         }
 
@@ -516,6 +546,82 @@ class WooSuite_Api {
         delete_post_meta( $id, '_woosuite_proposed_' . $field );
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function restore_content_item( $request ) {
+        $params = $request->get_json_params();
+        $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
+        $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : ''; // e.g., 'description', 'title', 'metaDescription'
+
+        $post = get_post( $id );
+        if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
+
+        $fields_process = array();
+        if ( $field === 'all' ) {
+            $fields_process = array( 'title', 'short_description', 'description', 'metaTitle', 'metaDescription', 'llmSummary', 'altText' );
+        } else {
+            $fields_process[] = $field;
+        }
+
+        foreach ( $fields_process as $f ) {
+            $history_key = '';
+            $is_native = false;
+            $native_field = '';
+
+            if ( $f === 'title' ) {
+                $history_key = '_woosuite_history_post_title';
+                $is_native = true;
+                $native_field = 'post_title';
+            } elseif ( $f === 'short_description' ) {
+                $history_key = '_woosuite_history_post_excerpt';
+                $is_native = true;
+                $native_field = 'post_excerpt';
+            } elseif ( $f === 'description' ) {
+                $history_key = '_woosuite_history_post_content';
+                $is_native = true;
+                $native_field = 'post_content';
+            } elseif ( $f === 'metaTitle' ) {
+                $history_key = '_woosuite_history__woosuite_meta_title';
+            } elseif ( $f === 'metaDescription' ) {
+                $history_key = '_woosuite_history__woosuite_meta_description';
+            } elseif ( $f === 'llmSummary' ) {
+                $history_key = '_woosuite_history__woosuite_llm_summary';
+            } elseif ( $f === 'altText' ) {
+                $history_key = '_woosuite_history__wp_attachment_image_alt';
+            }
+
+            if ( empty( $history_key ) ) continue;
+
+            $prev_value = get_post_meta( $id, $history_key, true );
+
+            // If empty, it might mean no history, OR history was empty string.
+            // We check if key exists to be sure?
+            // For now, if it returns something distinct or we trust it.
+            // get_post_meta returns '' if not found.
+            // We can't distinguish "not found" vs "empty string".
+            // But if we save history, we save whatever it was.
+            // If history doesn't exist, we probably shouldn't overwrite current with empty?
+            // Actually, best to check if metadata exists using metadata_exists() (WP function).
+            // But we can't easily do that here without global $wpdb or metadata_exists check.
+
+            if ( metadata_exists( 'post', $id, $history_key ) ) {
+                if ( $is_native ) {
+                    wp_update_post( array( 'ID' => $id, $native_field => $prev_value ) );
+                } else {
+                    $meta_key = str_replace( '_woosuite_history_', '', $history_key );
+                    update_post_meta( $id, $meta_key, $prev_value );
+                }
+            }
+        }
+
+        // We don't delete history so user can undo again (toggle) or we keep last state.
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    private function save_meta_history( $id, $key ) {
+        $val = get_post_meta( $id, $key, true );
+        update_post_meta( $id, '_woosuite_history_' . $key, $val );
     }
 
     public function bulk_apply_content_rewrite( $request ) {
@@ -692,7 +798,8 @@ class WooSuite_Api {
 
         $filters = array(
             'type' => isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : 'product',
-            'category' => isset( $params['category'] ) ? intval( $params['category'] ) : 0
+            'category' => isset( $params['category'] ) ? intval( $params['category'] ) : 0,
+            'ids' => isset( $params['ids'] ) && is_array( $params['ids'] ) ? array_map( 'intval', $params['ids'] ) : array()
         );
 
         // Reset failure flags to ensure we retry items that failed previously
