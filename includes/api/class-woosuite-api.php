@@ -361,26 +361,39 @@ class WooSuite_Api {
         if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
 
         $text = '';
+        $context = '';
+        $internal_instructions = '';
+
         if ( $field === 'title' ) {
             $text = $post->post_title;
+            // Use description as context so AI knows what the product is (Avoids Real Estate hallucination)
+            $context = strip_tags( $post->post_content );
+            if ( empty( $context ) ) $context = "Product: " . $post->post_title;
+            $internal_instructions = "Minimize the name to max 5 words.";
         } elseif ( $field === 'short_description' ) {
             $text = $post->post_excerpt;
-        } else {
-            $text = $post->post_content;
-        }
-
-        if ( empty( $text ) ) {
-            // If empty, try to generate from other fields?
-            // For now, if empty, we can't rewrite. But we can generate from scratch?
-            // Let's assume rewrite needs source.
-            // Actually, if description is empty, maybe use title to generate it?
-            if ( $field === 'description' || $field === 'short_description' ) {
-                $text = $post->post_title; // Fallback to title as context
+            $context = $post->post_title; // Name is the source
+            $internal_instructions = "Give exactly ONE word based on the name.";
+            if ( empty( $text ) ) $text = "Generate";
+        } elseif ( $field === 'description' ) {
+            $text = strip_tags( $post->post_content );
+            $internal_instructions = "Write a plain English description. Fix bad translation.";
+            // If desc is empty, use title as context to generate it
+            if ( empty( $text ) ) {
+                $text = "Generate description for: " . $post->post_title;
+                $context = $post->post_title;
             }
         }
 
+        // Combine instructions
+        $final_instructions = $internal_instructions;
+        if ( ! empty( $instructions ) ) {
+            $final_instructions .= " User Note: " . $instructions;
+        }
+
         $groq = new WooSuite_Groq();
-        $result = $groq->rewrite_content( $text, $field, $tone, $instructions );
+        // Pass context to prevent hallucinations
+        $result = $groq->rewrite_content( $text, $field, $tone, $final_instructions, $context );
 
         if ( is_wp_error( $result ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );

@@ -3,9 +3,14 @@
 ## Completed
 - [x] **Architecture**: Switched AI Engine from Google Gemini to **Groq (Llama 3)** for better stability and speed.
 - [x] **SEO**: Implemented **Smart Throttling** (sleep 2s) to respect Groq Free Tier limits (30 RPM).
+- [x] **SEO Fix**: Implemented **Auto-Resume** for Batch Worker when hitting API Rate Limits (schedules retry +60s).
+- [x] **SEO UI**: Added "Paused" state to SEO Dashboard with clear status message.
 - [x] **SEO**: Fixed "Batch Stops" issue by handling 429 Rate Limits gracefully AND recovering "Stuck Items" (older than 10 mins).
 - [x] **SEO**: Added 4MB size limit for Image Analysis to prevent crashes.
 - [x] **Settings**: Added native **Test Connection** button to React UI with immediate feedback.
+- [x] **Content Enhancer**: Fixed **Hallucinations** by injecting context (Description/Content) when rewriting Titles/Short Descriptions.
+- [x] **Content Enhancer**: Enforced user constraints (Title max 5 words, Short Desc 1 word).
+- [x] **UI**: Cleaned up redundant Test API buttons.
 - [x] **Cleanup**: Removed legacy Gemini code and diagnostic test pages.
 - [x] **Security**: Implemented Deep Scan with regex patterns and Auto-Whitelist for trusted plugins.
 - [x] **Security**: Added Quarantine UI and Logic.
@@ -13,7 +18,6 @@
 - [x] **SEO**: Enhanced Image SEO prompt to ignore random filenames.
 
 ## In Progress / Planned
-- [x] **Content**: Created **Content Enhancer** module for rewriting Product/Post Titles & Descriptions with Tone selection.
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
 - [ ] **Premium**: Plan for "Pro" version with higher limits or advanced models.
 

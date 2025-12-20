@@ -61,7 +61,17 @@ class WooSuite_Seo_Worker {
         }
 
         $status = get_option( 'woosuite_seo_batch_status' );
-        if ( ! $status || $status['status'] !== 'running' ) return;
+
+        // If status is 'paused', it means we were called by the scheduler to RESUME.
+        // So we switch back to 'running'.
+        if ( isset( $status['status'] ) && $status['status'] === 'paused' ) {
+            $status['status'] = 'running';
+            $status['message'] = 'Resuming after rate limit pause...';
+            update_option( 'woosuite_seo_batch_status', $status );
+            $this->log( "Resuming batch after pause..." );
+        } elseif ( ! $status || $status['status'] !== 'running' ) {
+            return;
+        }
 
         $status['last_updated'] = time();
         update_option( 'woosuite_seo_batch_status', $status );
@@ -99,6 +109,13 @@ class WooSuite_Seo_Worker {
                 $result = $this->process_single_item( $id, $status );
 
                 if ( $result === 'RATE_LIMIT' ) {
+                    // Schedule a resume event for 60 seconds later
+                    if ( ! get_option( 'woosuite_seo_batch_stop_signal' ) ) {
+                        // Clear any existing schedule first to be safe
+                        wp_clear_scheduled_hook( 'woosuite_seo_batch_process' );
+                        wp_schedule_single_event( time() + 60, 'woosuite_seo_batch_process' );
+                        $this->log( "Batch Paused (Rate Limit). Auto-resume scheduled in 60s." );
+                    }
                     break;
                 }
 
@@ -112,6 +129,8 @@ class WooSuite_Seo_Worker {
              $this->log( "FATAL BATCH ERROR: " . $e->getMessage() );
         }
 
+        // Reschedule if still running (and not paused by rate limit)
+        $status = get_option( 'woosuite_seo_batch_status' ); // Re-fetch to check if paused
         if ( ! get_option( 'woosuite_seo_batch_stop_signal' ) && $status['status'] === 'running' ) {
              wp_schedule_single_event( time() + 1, 'woosuite_seo_batch_process' );
         }

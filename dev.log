@@ -1,12 +1,15 @@
 
 > woosuite-ai-admin@0.0.0 dev
-> vite --port 3000
+> vite
 
 
-  VITE v6.4.1  ready in 241 ms
+  VITE v6.4.1  ready in 291 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://192.168.0.2:3000/
-5:51:11 PM [vite] (client) page reload verify_content_enhancer.py
-5:52:29 PM [vite] (client) page reload AGENTS.md
-5:52:34 PM [vite] (client) page reload workflow.md
+10:00:14 AM [vite] (client) page reload verify_ui_fixes_v2.py
+10:03:26 AM [vite] (client) page reload includes/class-woosuite-groq.php
+10:03:42 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+10:03:50 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+10:04:05 AM [vite] (client) page reload verify_ui_fixes_v2.py
+10:04:57 AM [vite] (client) page reload workflow.md

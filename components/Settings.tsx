@@ -187,6 +187,14 @@ const Settings: React.FC = () => {
         ) : activeTab === 'general' ? (
             <>
                 <div className="flex justify-end gap-2 items-center">
+                    <button
+                        onClick={handleTestConnection}
+                        disabled={testingConnection || (!apiKey && !systemKeyPresent)}
+                        className="px-4 py-2 rounded-lg font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {testingConnection ? <Loader className="animate-spin" size={18} /> : <Zap size={18} />}
+                        Test API
+                    </button>
                      {saveStatus === 'error' && (
                          <span className="text-red-600 text-sm font-medium flex items-center gap-1">
                              <AlertTriangle size={16} /> {saveError || 'Save Failed'}
@@ -232,15 +240,15 @@ const Settings: React.FC = () => {
                                 />
                                 <Key className="absolute left-3 top-3 text-gray-400" size={16} />
                             </div>
-                            <div className="flex justify-between items-start mt-2">
+                            <div className="flex justify-between items-center mt-3">
                                 <p className="text-xs text-gray-500">
                                     Enter your Groq API Key.
                                     {systemKeyPresent && <span className="text-green-600 ml-1 font-medium flex items-center inline-flex gap-1"><ShieldCheck size={10} /> System key detected.</span>}
                                 </p>
                                 <button
                                     onClick={handleTestConnection}
-                                    disabled={testingConnection || !apiKey}
-                                    className="text-sm text-purple-600 font-medium hover:text-purple-800 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                    disabled={testingConnection}
+                                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition flex items-center gap-2 disabled:opacity-50"
                                 >
                                     {testingConnection ? <Loader className="animate-spin" size={14} /> : <Zap size={14} />}
                                     {testingConnection ? 'Testing...' : 'Test Connection'}
