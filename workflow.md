@@ -20,7 +20,9 @@
 - [x] **Content Enhancer**: Implemented **Category Filtering** and **Status Filtering**.
 - [x] **Content Enhancer**: Fixed "Wrong Source Data" bug (separate Short/Long descriptions).
 - [x] **AI**: Implemented **Technical Tone** with specific prompt instructions.
-- [x] **AI**: Enforced **Strict Title Context** to prevent invalid descriptions (e.g., "Fashion" for "USB").
+- [x] **AI**: Enforced **Strict Title Context** to prevent invalid descriptions.
+- [x] **SEO**: Implemented **Product Tags** generation and saving.
+- [x] **SEO**: Fixed "Changes Not Applied" by implementing **Auto-Save** for manual "Generate" actions.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

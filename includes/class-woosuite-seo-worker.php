@@ -241,6 +241,22 @@ class WooSuite_Seo_Worker {
             update_post_meta( $post->ID, '_woosuite_llm_summary', sanitize_textarea_field( $result['llmSummary'] ) );
         }
 
+        if ( ! empty( $result['tags'] ) ) {
+            $tags = explode( ',', $result['tags'] );
+            $tags = array_map( 'trim', $tags );
+            $tags = array_filter( $tags ); // Remove empty
+
+            $taxonomy = 'post_tag';
+            if ( $post->post_type === 'product' ) {
+                $taxonomy = 'product_tag';
+            }
+
+            if ( taxonomy_exists( $taxonomy ) && ! empty( $tags ) ) {
+                wp_set_object_terms( $post->ID, $tags, $taxonomy, true ); // true = Append
+                $updates++;
+            }
+        }
+
         if ( $rewrite_titles && ! empty( $result['simplifiedTitle'] ) ) {
             wp_update_post( array(
                 'ID' => $post->ID,
