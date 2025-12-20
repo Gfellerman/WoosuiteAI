@@ -50,16 +50,18 @@ class WooSuite_Groq {
         {
             \"title\": \"Max 60 chars meta title\",
             \"description\": \"Max 160 chars meta description\",
-            \"llmSummary\": \"Concise summary for AI (max 50 words)\"
+            \"llmSummary\": \"Concise summary for AI (max 50 words)\",
+            \"tags\": \"comma, separated, tags, max 5\"
         }";
 
         if ( ! empty( $item['rewrite_title'] ) ) {
-            $rewrite_instruction = "4. simplifiedTitle: A clean, concise product name (max 6 words). Remove keyword stuffing. E.g., 'Modern Velvet Office Chair'.";
+            $rewrite_instruction = "5. simplifiedTitle: A clean, concise product name (max 6 words). Remove keyword stuffing. E.g., 'Modern Velvet Office Chair'.";
             $json_structure = "
             {
                 \"title\": \"Max 60 chars meta title\",
                 \"description\": \"Max 160 chars meta description\",
                 \"llmSummary\": \"Concise summary for AI (max 50 words)\",
+                \"tags\": \"comma, separated, tags, max 5\",
                 \"simplifiedTitle\": \"Clean product name\"
             }";
         }
@@ -73,6 +75,7 @@ class WooSuite_Groq {
             1. Title: Keyword rich, max 60 chars.
             2. Description: Enticing, max 160 chars.
             3. LLM Summary: Fact-dense, under 50 words.
+            4. Tags: Relevant keywords, max 5, comma separated.
             $rewrite_instruction
 
             Return strictly JSON matching this structure:

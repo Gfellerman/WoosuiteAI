@@ -400,6 +400,39 @@ class WooSuite_Api {
             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
         }
 
+        // AUTO-SAVE: Immediately save the generated results to the database
+        // This ensures that "Generate" actions in the UI are persistent.
+
+        if ( ! empty( $result['title'] ) ) {
+            update_post_meta( $id, '_woosuite_meta_title', sanitize_text_field( $result['title'] ) );
+        }
+
+        if ( ! empty( $result['description'] ) ) {
+            $desc = sanitize_text_field( $result['description'] );
+            update_post_meta( $id, '_woosuite_meta_description', $desc );
+            update_post_meta( $id, '_yoast_wpseo_metadesc', $desc );
+            update_post_meta( $id, 'rank_math_description', $desc );
+        }
+
+        if ( ! empty( $result['llmSummary'] ) ) {
+            update_post_meta( $id, '_woosuite_llm_summary', sanitize_textarea_field( $result['llmSummary'] ) );
+        }
+
+        if ( ! empty( $result['tags'] ) ) {
+            $tags = explode( ',', $result['tags'] );
+            $tags = array_map( 'trim', $tags );
+            $tags = array_filter( $tags ); // Remove empty
+
+            $taxonomy = 'post_tag';
+            if ( $post->post_type === 'product' ) {
+                $taxonomy = 'product_tag';
+            }
+
+            if ( taxonomy_exists( $taxonomy ) && ! empty( $tags ) ) {
+                wp_set_object_terms( $id, $tags, $taxonomy, true ); // true = Append
+            }
+        }
+
         return new WP_REST_Response( array( 'success' => true, 'data' => $result ), 200 );
     }
 
