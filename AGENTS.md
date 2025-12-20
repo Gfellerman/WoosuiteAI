@@ -3,6 +3,13 @@
 ## Project Overview
 WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq AI) and Security features.
 
+## Core Integrity & Regression Policy (CRITICAL)
+*   **Do No Harm:** Every change must be evaluated for its impact on the "Core" of the website (Frontend performance, Critical functionality, WP Admin stability).
+*   **Isolation:** Admin features must be strictly scoped to `is_admin()` where possible. Do not leak styles or scripts to the frontend unless explicitly required (e.g., Honeypot).
+*   **Performance:** Background processes (SEO Worker, Scanners) must **ALWAYS** use throttling (`sleep()`) and batch limits to ensure they never degrade the live site's performance.
+*   **Regression Testing:** Before every submission, ask: "Could this change break the site for a logged-out visitor? Could it crash the server?"
+*   **Safe Defaults:** Security features (Firewall) must default to "Simulation Mode" (Log Only) or be carefully tested to avoid blocking legitimate users/bots.
+
 ## Coding Standards
 *   **PHP:** Follow WordPress Coding Standards. Use strict types where possible.
 *   **React:** Use functional components and Hooks. State management via local state or Context API.
