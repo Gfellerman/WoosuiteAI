@@ -690,6 +690,11 @@ class WooSuite_Api {
         $rewrite = isset( $params['rewriteTitles'] ) && $params['rewriteTitles'] ? 'yes' : 'no';
         update_option( 'woosuite_seo_rewrite_titles', $rewrite );
 
+        $filters = array(
+            'type' => isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : 'product',
+            'category' => isset( $params['category'] ) ? intval( $params['category'] ) : 0
+        );
+
         // Reset failure flags to ensure we retry items that failed previously
         global $wpdb;
         $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_failed'" );
@@ -699,7 +704,7 @@ class WooSuite_Api {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );
         }
         $worker = new WooSuite_Seo_Worker();
-        $worker->start_batch();
+        $worker->start_batch( $filters );
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch started' ), 200 );
     }
 

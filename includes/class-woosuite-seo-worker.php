@@ -29,11 +29,18 @@ class WooSuite_Seo_Worker {
         update_option( $this->log_option, $logs, false );
     }
 
-    public function start_batch() {
+    /**
+     * Start the batch process with filters
+     * @param array $filters e.g. ['type' => 'product', 'category' => 123]
+     */
+    public function start_batch( $filters = array() ) {
         update_option( 'woosuite_seo_batch_stop_signal', false );
+        update_option( 'woosuite_seo_batch_filters', $filters );
 
-        $total = $this->get_total_unoptimized_count();
-        $this->log( "Starting Batch (Groq Engine). Total items found: $total" );
+        $total = $this->get_total_unoptimized_count( $filters );
+        $type_label = isset( $filters['type'] ) ? ucfirst( $filters['type'] ) : 'Item';
+
+        $this->log( "Starting Batch for {$type_label}s. Total found: $total" );
 
         update_option( 'woosuite_seo_batch_status', array(
             'status' => 'running',
@@ -41,7 +48,7 @@ class WooSuite_Seo_Worker {
             'processed' => 0,
             'start_time' => current_time( 'mysql' ),
             'last_updated' => time(),
-            'message' => "Starting optimization of $total items..."
+            'message' => "Starting optimization of $total {$type_label}s..."
         ));
 
         if ( ! wp_next_scheduled( 'woosuite_seo_batch_process' ) ) {
@@ -93,7 +100,8 @@ class WooSuite_Seo_Worker {
                     return;
                 }
 
-                $ids = $this->get_next_batch_items( 1 );
+                $filters = get_option( 'woosuite_seo_batch_filters', array() );
+                $ids = $this->get_next_batch_items( 1, $filters );
 
                 if ( empty( $ids ) ) {
                     $this->log( "No more items to process. Batch Complete." );
@@ -145,6 +153,7 @@ class WooSuite_Seo_Worker {
 
         $this->log( "Processing ID {$id} ({$post->post_type})..." );
 
+        // Mark as processed immediately to avoid loops
         update_post_meta( $id, '_woosuite_seo_processed_at', time() );
 
         try {
@@ -208,7 +217,7 @@ class WooSuite_Seo_Worker {
             if ( $product ) $item['price'] = $product->get_price();
         }
 
-        // Call Groq
+        // Call Groq for Text SEO
         $result = $this->groq->generate_seo_meta( $item );
 
         if ( is_wp_error( $result ) ) {
@@ -252,8 +261,6 @@ class WooSuite_Seo_Worker {
             }
 
             if ( taxonomy_exists( $taxonomy ) && ! empty( $tags ) ) {
-                // User requested to remove old tags and keep only enhanced ones.
-                // So we set append = false (replace).
                 wp_set_object_terms( $post->ID, $tags, $taxonomy, false );
                 $updates++;
             }
@@ -267,11 +274,75 @@ class WooSuite_Seo_Worker {
             $updates++;
         }
 
+        // PRODUCT IMAGE OPTIMIZATION (Contextual)
+        if ( $post->post_type === 'product' ) {
+            $this->process_product_images( $post->ID, $post->post_title );
+        }
+
         if ( $updates === 0 ) {
             $this->log( "ID {$post->ID} - AI result valid but no fields were updated." );
         } else {
             delete_post_meta( $post->ID, '_woosuite_seo_failed' );
             delete_post_meta( $post->ID, '_woosuite_seo_last_error' );
+        }
+    }
+
+    private function process_product_images( $product_id, $product_name ) {
+        // Get Featured Image
+        $featured_id = get_post_thumbnail_id( $product_id );
+        $gallery_ids = get_post_meta( $product_id, '_product_image_gallery', true );
+
+        $image_ids = array();
+        if ( $featured_id ) $image_ids[] = $featured_id;
+        if ( ! empty( $gallery_ids ) ) {
+            $ids = explode( ',', $gallery_ids );
+            $image_ids = array_merge( $image_ids, $ids );
+        }
+
+        $image_ids = array_unique( array_filter( $image_ids ) );
+
+        foreach ( $image_ids as $img_id ) {
+            // Skip if already optimized
+            if ( get_post_meta( $img_id, '_wp_attachment_image_alt', true ) ) {
+                continue;
+            }
+
+            $img_post = get_post( $img_id );
+            if ( ! $img_post ) continue;
+
+            $this->log( "Optimizing Product Image ID {$img_id} for Product: {$product_name}" );
+
+            try {
+                // Pass Product Name as context to avoid "gibberish" or random filename issues
+                // We artificially inject the product name into the "filename" param for the prompt context
+                $context_name = "Product: $product_name";
+
+                $url = wp_get_attachment_url( $img_id );
+                if ( ! $url ) continue;
+
+                // Use Groq Vision
+                $result = $this->groq->generate_image_seo( $url, $context_name );
+
+                if ( ! is_wp_error( $result ) && ! empty( $result['altText'] ) ) {
+                    update_post_meta( $img_id, '_wp_attachment_image_alt', sanitize_text_field( $result['altText'] ) );
+
+                    if ( ! empty( $result['title'] ) ) {
+                        wp_update_post( array(
+                            'ID' => $img_id,
+                            'post_title' => sanitize_text_field( $result['title'] )
+                        ) );
+                    }
+
+                    // Mark as processed so it doesn't show up in the "Images" tab list
+                    update_post_meta( $img_id, '_woosuite_seo_processed_at', time() );
+                }
+
+                // Sleep briefly to avoid hammering the API if product has many images
+                sleep(1);
+
+            } catch ( Exception $e ) {
+                $this->log( "Failed to optimize image {$img_id}: " . $e->getMessage() );
+            }
         }
     }
 
@@ -281,7 +352,6 @@ class WooSuite_Seo_Worker {
             throw new Exception( "Missing attachment URL." );
         }
 
-        // Call Groq
         $result = $this->groq->generate_image_seo( $url, basename( $url ) );
 
         if ( is_wp_error( $result ) ) {
@@ -314,85 +384,104 @@ class WooSuite_Seo_Worker {
         }
     }
 
-    private function get_next_batch_items( $limit ) {
-        // Text Items
-        $posts = get_posts( array(
-            'post_type' => array( 'product', 'post', 'page' ),
-            'post_status' => 'publish',
+    private function get_next_batch_items( $limit, $filters = array() ) {
+        // Build Meta Query (Unoptimized)
+        $meta_query = array(
+            'relation' => 'AND',
+            array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
+            array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
+        );
+
+        // Determine Type
+        $type = isset( $filters['type'] ) ? $filters['type'] : 'product';
+
+        $args = array(
             'posts_per_page' => $limit,
             'fields' => 'ids',
             'orderby' => 'ID',
             'order' => 'ASC',
-            'meta_query' => array(
-                'relation' => 'AND',
-                array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
-            )
-        ) );
+        );
 
-        if ( ! empty( $posts ) ) return $posts;
+        if ( $type === 'image' ) {
+            $args['post_type'] = 'attachment';
+            $args['post_status'] = 'inherit';
+            $args['post_mime_type'] = 'image';
 
-        // Image Items
-        $images = get_posts( array(
-            'post_type' => 'attachment',
-            'post_status' => 'inherit',
-            'post_mime_type' => 'image',
-            'posts_per_page' => $limit,
-            'fields' => 'ids',
-            'orderby' => 'ID',
-            'order' => 'ASC',
-            'meta_query' => array(
-                'relation' => 'AND',
-                array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
-            )
-        ) );
+            // Image specific meta check
+            $meta_query[] = array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' );
 
-        return $images;
+        } else {
+            $args['post_type'] = $type; // product, post, page
+            $args['post_status'] = 'publish';
+
+            // Text specific meta check
+            $meta_query[] = array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' );
+        }
+
+        // Apply Category Filter if present
+        if ( ! empty( $filters['category'] ) ) {
+            $taxonomy = ($type === 'product') ? 'product_cat' : 'category';
+            $args['tax_query'] = array(
+                array(
+                    'taxonomy' => $taxonomy,
+                    'field' => 'term_id',
+                    'terms' => $filters['category'],
+                    'include_children' => true
+                )
+            );
+        }
+
+        $args['meta_query'] = $meta_query;
+
+        return get_posts( $args );
     }
 
-    private function get_total_unoptimized_count() {
-        $q1 = new WP_Query( array(
-            'post_type' => array( 'product', 'post', 'page' ),
-            'post_status' => 'publish',
-            'fields' => 'ids',
-            'meta_query' => array(
-                'relation' => 'AND',
-                array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
-            )
-        ) );
+    private function get_total_unoptimized_count( $filters = array() ) {
+        $type = isset( $filters['type'] ) ? $filters['type'] : 'product';
 
-        $q2 = new WP_Query( array(
-            'post_type' => 'attachment',
-            'post_status' => 'inherit',
-            'post_mime_type' => 'image',
+        $args = array(
             'fields' => 'ids',
-            'meta_query' => array(
-                'relation' => 'AND',
-                array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
-            )
-        ) );
+            'posts_per_page' => -1, // Just counting
+        );
 
-        return $q1->found_posts + $q2->found_posts;
+        $meta_query = array(
+            'relation' => 'AND',
+            array( 'key' => '_woosuite_seo_failed', 'compare' => 'NOT EXISTS' ),
+            array( 'key' => '_woosuite_seo_processed_at', 'compare' => 'NOT EXISTS' )
+        );
+
+        if ( $type === 'image' ) {
+            $args['post_type'] = 'attachment';
+            $args['post_status'] = 'inherit';
+            $args['post_mime_type'] = 'image';
+            $meta_query[] = array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' );
+        } else {
+            $args['post_type'] = $type;
+            $args['post_status'] = 'publish';
+            $meta_query[] = array( 'key' => '_woosuite_meta_description', 'compare' => 'NOT EXISTS' );
+        }
+
+        if ( ! empty( $filters['category'] ) ) {
+            $taxonomy = ($type === 'product') ? 'product_cat' : 'category';
+            $args['tax_query'] = array(
+                array(
+                    'taxonomy' => $taxonomy,
+                    'field' => 'term_id',
+                    'terms' => $filters['category'],
+                    'include_children' => true
+                )
+            );
+        }
+
+        $args['meta_query'] = $meta_query;
+
+        $query = new WP_Query( $args );
+        return $query->found_posts;
     }
 
-    /**
-     * Resets items that have been stuck in 'processing' state for too long.
-     * This prevents the batch from hanging if a PHP process crashes.
-     */
     private function cleanup_stuck_items() {
         global $wpdb;
-        // 10 minutes = 600 seconds
-        $cutoff = time() - 600;
-
-        // Delete the processing flag for old items
-        // Note: meta_value is string, but we can compare numerically if it holds a timestamp
+        $cutoff = time() - 600; // 10 mins
         $wpdb->query( $wpdb->prepare(
             "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_processed_at' AND meta_value < %d",
             $cutoff
