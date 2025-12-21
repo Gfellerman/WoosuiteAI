@@ -50,3 +50,10 @@
 6:29:05 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
 6:33:23 PM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
 6:40:08 PM [vite] (client) page reload workflow.md
+7:47:09 PM [vite] (client) page reload AGENTS.md
+7:51:04 AM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+7:51:15 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+7:51:28 AM [vite] (client) page reload includes/api/class-woosuite-api.php
+7:51:33 AM [vite] (client) page reload includes/class-woosuite-seo-worker.php
+7:52:14 AM [vite] (client) hmr update /components/SeoManager.tsx, /index.css?direct, /index.css
+7:54:49 AM [vite] (client) page reload workflow.md

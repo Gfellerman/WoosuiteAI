@@ -33,6 +33,9 @@
 - [x] **UI**: Restricted Content Enhancer to **Products Only** (removed Posts/Pages tabs) per user request.
 - [x] **UI**: Added detailed **SEO Analysis Tooltip** visualizing Title/Meta Desc length checks and Alt Text presence.
 - [x] **Persistence**: "Optimize Selected" now triggers robust background worker instead of fragile client-side loop.
+- [x] **SEO**: Added **Scan Website** feature with health score and breakdown (Products/Images/Posts).
+- [x] **SEO UI**: Added **Failure Tracking** to Batch Progress (counts and displays failed items instead of stalling).
+- [x] **SEO UI**: Added **View Data** button to item rows, allowing users to verify stored SEO data (Title, Meta, Alt) directly.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

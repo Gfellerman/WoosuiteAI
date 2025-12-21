@@ -46,6 +46,7 @@ class WooSuite_Seo_Worker {
             'status' => 'running',
             'total' => $total,
             'processed' => 0,
+            'failed' => 0,
             'start_time' => current_time( 'mysql' ),
             'last_updated' => time(),
             'message' => "Starting optimization of $total {$type_label}s..."
@@ -127,6 +128,19 @@ class WooSuite_Seo_Worker {
                     break;
                 }
 
+                // Increment counts handled in process_single_item?
+                // No, process_single_item handles 'processed' increment only on success.
+                // We need to handle failures here if process_single_item didn't.
+                // But process_single_item takes &$status reference.
+
+                // Let's refactor process_single_item to NOT update status counts, or we check result.
+                if ( $result === 'ERROR' ) {
+                    $status['processed']++;
+                    if ( ! isset( $status['failed'] ) ) $status['failed'] = 0;
+                    $status['failed']++;
+                    update_option( 'woosuite_seo_batch_status', $status );
+                }
+
                 // Smart Throttling for Groq Free Tier (approx 30 RPM = 1 request every 2s)
                 // We add a slight buffer (2s)
                 sleep(2);
@@ -165,6 +179,7 @@ class WooSuite_Seo_Worker {
                 $this->process_text( $post, $rewrite_titles );
             }
 
+            // Success
             $status['processed']++;
             $status['last_updated'] = time();
             $status['message'] = "Processed ID {$id}: " . substr($post->post_title, 0, 30) . "...";
@@ -454,7 +469,7 @@ class WooSuite_Seo_Worker {
         return get_posts( $args );
     }
 
-    private function get_total_unoptimized_count( $filters = array() ) {
+    public function get_total_unoptimized_count( $filters = array() ) {
         $type = isset( $filters['type'] ) ? $filters['type'] : 'product';
 
         $args = array(
