@@ -105,6 +105,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/seo/batch/resume', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'resume_seo_batch' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/seo/batch/stop', array(
             'methods' => 'POST',
             'callback' => array( $this, 'stop_seo_batch' ),
@@ -796,6 +802,15 @@ class WooSuite_Api {
     }
 
     // --- SEO Batch ---
+
+    public function resume_seo_batch( $request ) {
+        if ( ! class_exists( 'WooSuite_Seo_Worker' ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );
+        }
+        $worker = new WooSuite_Seo_Worker();
+        $worker->resume_batch();
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch resumed' ), 200 );
+    }
 
     public function start_seo_batch( $request ) {
         $params = $request->get_json_params();

@@ -36,6 +36,8 @@
 - [x] **SEO**: Added **Scan Website** feature with health score and breakdown (Products/Images/Posts).
 - [x] **SEO UI**: Added **Failure Tracking** to Batch Progress (counts and displays failed items instead of stalling).
 - [x] **SEO UI**: Added **View Data** button to item rows, allowing users to verify stored SEO data (Title, Meta, Alt) directly.
+- [x] **Stability**: Implemented **Hybrid Batch Strategy** (Client-Side Loop for < 50 items, Background Worker for >= 50) to ensure reliability for small batches.
+- [x] **Fix**: Corrected **Resume Logic** to preserve existing filters (preventing "Resume" from optimizing all 3700 items instead of selected 20).
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
