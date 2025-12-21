@@ -34,6 +34,10 @@ const SeoManager: React.FC = () => {
   const [scanResult, setScanResult] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
 
+  // Client Side Batch (Small Selections)
+  const [isClientBatch, setIsClientBatch] = useState(false);
+  const [clientBatchProgress, setClientBatchProgress] = useState({ current: 0, total: 0, failed: 0 });
+
   // Preview
   const [previewItem, setPreviewItem] = useState<ContentItem | null>(null);
 
@@ -143,8 +147,16 @@ const SeoManager: React.FC = () => {
   };
 
   const resumeBatch = async () => {
-      // Resuming is effectively starting again, the worker handles the rest (skipping processed)
-      await startBackgroundBatch();
+      if (!apiUrl) return;
+      try {
+          const res = await fetch(`${apiUrl}/seo/batch/resume`, {
+              method: 'POST',
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              await checkBatchStatus();
+          }
+      } catch (e) { console.error(e); }
   };
 
   const stopBackgroundBatch = async () => {
@@ -225,7 +237,43 @@ const SeoManager: React.FC = () => {
 
   const handleBulkOptimize = async () => {
       if (selectedIds.length === 0) return;
-      await startBackgroundBatch(selectedIds);
+
+      if (selectedIds.length < 50) {
+          startClientBatch();
+      } else {
+          await startBackgroundBatch(selectedIds);
+          setSelectedIds([]);
+      }
+  };
+
+  const startClientBatch = async () => {
+      setIsClientBatch(true);
+      setClientBatchProgress({ current: 0, total: selectedIds.length, failed: 0 });
+
+      for (let i = 0; i < selectedIds.length; i++) {
+          const id = selectedIds[i];
+          const item = items.find(p => p.id === id);
+          if (item) {
+             try {
+                const res = await fetch(`${apiUrl}/seo/generate/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+                    body: JSON.stringify({ rewriteTitle: false })
+                });
+                if (!res.ok) throw new Error("Failed");
+
+                const json = await res.json();
+                if (json.success && json.data) {
+                    const updates = mapResultToItem(json.data, item.type);
+                    setItems(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+                }
+             } catch (e) {
+                 setClientBatchProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
+             }
+          }
+          setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
+      }
+      setIsClientBatch(false);
       setSelectedIds([]);
   };
 
@@ -797,6 +845,47 @@ const SeoManager: React.FC = () => {
                        >
                            Close
                        </button>
+                   </div>
+               </div>
+          </div>
+      )}
+
+      {/* Client Batch Modal */}
+      {isClientBatch && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                   <h3 className="text-xl font-bold mb-4">Optimizing Selected Items...</h3>
+                   <div className="space-y-4">
+                       <div className="flex items-center gap-3">
+                            <RefreshCw className="animate-spin text-purple-600" size={24} />
+                            <div>
+                                <div className="font-semibold text-gray-900">Processing...</div>
+                                <div className="text-sm text-gray-500">Please do not close this tab.</div>
+                            </div>
+                       </div>
+                       <div>
+                           <div className="flex justify-between text-sm mb-1">
+                               <span>Progress</span>
+                               <span>{Math.round((clientBatchProgress.current / clientBatchProgress.total) * 100)}%</span>
+                           </div>
+                           <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                               <div
+                                 className="h-full bg-purple-600 transition-all duration-300 ease-out"
+                                 style={{ width: `${((clientBatchProgress.current - clientBatchProgress.failed) / clientBatchProgress.total) * 100}%` }}
+                               />
+                               {clientBatchProgress.failed > 0 && (
+                                   <div
+                                     className="h-full bg-red-500 transition-all duration-300 ease-out"
+                                     style={{ width: `${(clientBatchProgress.failed / clientBatchProgress.total) * 100}%` }}
+                                   />
+                               )}
+                           </div>
+                           <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                <span>Processed: {clientBatchProgress.current}</span>
+                                {clientBatchProgress.failed > 0 && <span className="text-red-600 font-semibold">{clientBatchProgress.failed} Failed</span>}
+                                <span>Total: {clientBatchProgress.total}</span>
+                           </div>
+                       </div>
                    </div>
                </div>
           </div>

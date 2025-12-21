@@ -57,6 +57,23 @@ class WooSuite_Seo_Worker {
         }
     }
 
+    public function resume_batch() {
+        $status = get_option( 'woosuite_seo_batch_status' );
+        // Only resume if not already running (or if stuck)
+        // We force it to 'running'
+        $status['status'] = 'running';
+        $status['message'] = 'Resuming batch process...';
+        $status['last_updated'] = time();
+        update_option( 'woosuite_seo_batch_status', $status );
+        update_option( 'woosuite_seo_batch_stop_signal', false );
+
+        $this->log( "Manual Resume Triggered." );
+
+        if ( ! wp_next_scheduled( 'woosuite_seo_batch_process' ) ) {
+            wp_schedule_single_event( time(), 'woosuite_seo_batch_process' );
+        }
+    }
+
     public function process_batch() {
         // Cleanup stuck items (older than 10 mins)
         $this->cleanup_stuck_items();
