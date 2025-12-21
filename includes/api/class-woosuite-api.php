@@ -123,6 +123,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/seo/scan', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'run_seo_scan' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         // SEO Generate (Single Item) - Server Side
         register_rest_route( $this->namespace, '/seo/generate/(?P<id>\d+)', array(
             'methods' => 'POST',
@@ -845,6 +851,56 @@ class WooSuite_Api {
     public function get_seo_batch_status( $request ) {
         $status = get_option( 'woosuite_seo_batch_status', array( 'status' => 'idle' ) );
         return new WP_REST_Response( $status, 200 );
+    }
+
+    public function run_seo_scan( $request ) {
+        if ( ! class_exists( 'WooSuite_Seo_Worker' ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Worker class not found' ), 500 );
+        }
+        $worker = new WooSuite_Seo_Worker();
+
+        // Products
+        $total_products = $this->count_posts( 'product' );
+        $missing_products = $worker->get_total_unoptimized_count( array( 'type' => 'product' ) );
+
+        // Posts
+        $total_posts = $this->count_posts( 'post' );
+        $missing_posts = $worker->get_total_unoptimized_count( array( 'type' => 'post' ) );
+
+        // Images
+        $total_images = $this->count_posts( 'attachment', 'inherit', 'image' );
+        $missing_images = $worker->get_total_unoptimized_count( array( 'type' => 'image' ) );
+
+        $total_items = $total_products + $total_posts + $total_images;
+        $total_missing = $missing_products + $missing_posts + $missing_images;
+        $optimized = $total_items - $total_missing;
+
+        $score = $total_items > 0 ? round( ( $optimized / $total_items ) * 100 ) : 0;
+
+        $data = array(
+            'score' => $score,
+            'total_items' => $total_items,
+            'optimized_items' => $optimized,
+            'details' => array(
+                'product' => array( 'total' => $total_products, 'missing' => $missing_products ),
+                'post' => array( 'total' => $total_posts, 'missing' => $missing_posts ),
+                'image' => array( 'total' => $total_images, 'missing' => $missing_images ),
+            )
+        );
+
+        return new WP_REST_Response( $data, 200 );
+    }
+
+    private function count_posts( $type, $status = 'publish', $mime = '' ) {
+        $args = array(
+            'post_type' => $type,
+            'post_status' => $status,
+            'posts_per_page' => -1,
+            'fields' => 'ids'
+        );
+        if ( $mime ) $args['post_mime_type'] = $mime;
+        $query = new WP_Query( $args );
+        return $query->found_posts;
     }
 
     public function check_permission() {

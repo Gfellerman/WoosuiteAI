@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2, RotateCw, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Sparkles, Check, AlertCircle, RefreshCw, Bot, FileText, Image as ImageIcon, Box, Layout, Settings, ExternalLink, ChevronLeft, ChevronRight, Filter, X, Loader, Play, Ban, Trash2, RotateCw, RotateCcw, AlertTriangle, PieChart, Eye, Search } from 'lucide-react';
 
 const SeoManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
@@ -28,6 +28,14 @@ const SeoManager: React.FC = () => {
 
   // Sitemap
   const [showSitemapModal, setShowSitemapModal] = useState(false);
+
+  // Scan / Health
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
+
+  // Preview
+  const [previewItem, setPreviewItem] = useState<ContentItem | null>(null);
 
   const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
@@ -64,6 +72,21 @@ const SeoManager: React.FC = () => {
               setBatchStatus(data);
           }
       } catch (e) { console.error(e); }
+  };
+
+  const handleScan = async () => {
+      setScanning(true);
+      setShowScanModal(true);
+      try {
+          const res = await fetch(`${apiUrl}/seo/scan`, {
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              const data = await res.json();
+              setScanResult(data);
+          }
+      } catch (e) { console.error(e); }
+      setScanning(false);
   };
 
   const fetchItems = async () => {
@@ -300,6 +323,11 @@ const SeoManager: React.FC = () => {
         </div>
         <div className="flex gap-2">
             <button
+                onClick={handleScan}
+                className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2 text-purple-700">
+                <PieChart size={16} /> Scan Website
+            </button>
+            <button
                 onClick={() => setShowSitemapModal(true)}
                 className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2">
                 <Layout size={16} /> Sitemap
@@ -531,6 +559,13 @@ const SeoManager: React.FC = () => {
                         Generate
                     </button>
 
+                    <button
+                        onClick={() => setPreviewItem(item)}
+                        className="text-xs text-gray-500 hover:text-purple-600 flex items-center justify-center gap-1 mt-1 w-full"
+                    >
+                        <Eye size={12} /> View Data
+                    </button>
+
                     {item.hasHistory && (
                         <button
                             onClick={() => handleRestore(item)}
@@ -653,6 +688,120 @@ const SeoManager: React.FC = () => {
           </div>
       )}
 
+      {/* Scan Modal */}
+      {showScanModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                   <h3 className="text-xl font-bold mb-4">Website SEO Health</h3>
+
+                   {scanning ? (
+                       <div className="p-8 flex flex-col items-center gap-4">
+                           <Loader className="animate-spin text-purple-600" size={32} />
+                           <span className="text-gray-600">Scanning content...</span>
+                       </div>
+                   ) : scanResult ? (
+                       <div className="space-y-6">
+                           <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                               <div>
+                                   <div className="text-3xl font-bold text-gray-900">{scanResult.score}/100</div>
+                                   <div className="text-sm text-gray-500">Overall Optimization Score</div>
+                               </div>
+                               <div className={`p-3 rounded-full ${scanResult.score >= 80 ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                   <PieChart size={24} />
+                               </div>
+                           </div>
+
+                           <div className="space-y-3">
+                               <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+                                   <span className="font-medium text-gray-700">Products</span>
+                                   <span className="text-red-500 font-bold">{scanResult.details.product.missing} unoptimized</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+                                   <span className="font-medium text-gray-700">Images</span>
+                                   <span className="text-red-500 font-bold">{scanResult.details.image.missing} unoptimized</span>
+                               </div>
+                               <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+                                   <span className="font-medium text-gray-700">Posts</span>
+                                   <span className="text-red-500 font-bold">{scanResult.details.post.missing} unoptimized</span>
+                               </div>
+                           </div>
+
+                           <div className="bg-blue-50 text-blue-800 p-3 rounded text-xs">
+                               <span className="font-bold">Tip:</span> Use the "Optimize All Content" button to fix these issues automatically.
+                           </div>
+                       </div>
+                   ) : (
+                       <div className="text-red-500">Scan failed. Please try again.</div>
+                   )}
+
+                   <div className="mt-6 flex justify-end">
+                       <button
+                            onClick={() => setShowScanModal(false)}
+                            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                       >
+                           Close
+                       </button>
+                   </div>
+               </div>
+          </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+               <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 overflow-y-auto max-h-[90vh]">
+                   <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-bold">SEO Data Preview</h3>
+                        <button onClick={() => setPreviewItem(null)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                   </div>
+
+                   <div className="space-y-4 text-sm">
+                       <div>
+                           <div className="font-semibold text-gray-500 mb-1">Post Title</div>
+                           <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.name}</div>
+                       </div>
+
+                       {previewItem.metaTitle && (
+                           <div>
+                               <div className="font-semibold text-gray-500 mb-1">Meta Title</div>
+                               <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.metaTitle}</div>
+                           </div>
+                       )}
+
+                       {previewItem.metaDescription && (
+                           <div>
+                               <div className="font-semibold text-gray-500 mb-1">Meta Description</div>
+                               <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.metaDescription}</div>
+                           </div>
+                       )}
+
+                       {previewItem.llmSummary && (
+                           <div>
+                               <div className="font-semibold text-gray-500 mb-1">AI Summary</div>
+                               <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.llmSummary}</div>
+                           </div>
+                       )}
+
+                       {previewItem.altText && (
+                           <div>
+                               <div className="font-semibold text-gray-500 mb-1">Alt Text</div>
+                               <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.altText}</div>
+                           </div>
+                       )}
+                   </div>
+
+                   <div className="mt-6 flex justify-end">
+                       <button
+                            onClick={() => setPreviewItem(null)}
+                            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                       >
+                           Close
+                       </button>
+                   </div>
+               </div>
+          </div>
+      )}
+
       {/* Progress Modal */}
       {showProcessModal && batchStatus && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -681,14 +830,22 @@ const SeoManager: React.FC = () => {
                                    <span>Progress</span>
                                    <span>{Math.round((batchStatus.processed / batchStatus.total) * 100)}%</span>
                                </div>
-                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
                                    <div
                                      className="h-full bg-purple-600 transition-all duration-500 ease-out"
-                                     style={{ width: `${(batchStatus.processed / batchStatus.total) * 100}%` }}
+                                     style={{ width: `${((batchStatus.processed - (batchStatus.failed || 0)) / batchStatus.total) * 100}%` }}
                                    />
+                                   {batchStatus.failed > 0 && (
+                                       <div
+                                         className="h-full bg-red-500 transition-all duration-500 ease-out"
+                                         style={{ width: `${(batchStatus.failed / batchStatus.total) * 100}%` }}
+                                       />
+                                   )}
                                </div>
-                               <div className="text-xs text-center mt-1 text-gray-400">
-                                   Processed {batchStatus.processed} of {batchStatus.total} items
+                               <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                    <span>Processed: {batchStatus.processed}</span>
+                                    {batchStatus.failed > 0 && <span className="text-red-600 font-semibold">{batchStatus.failed} Failed</span>}
+                                    <span>Total: {batchStatus.total}</span>
                                </div>
                            </div>
                        )}
