@@ -46,13 +46,13 @@
 - [x] **Stability**: Added **Client-Side Heartbeat** to SEO Manager to auto-kick stalled batches.
 - [x] **Fix**: Relaxed SEO Badge logic (50 chars min) to correctly reflect AI-generated content status.
 - [x] **Fix**: Removed "Simplify Product Names" checkbox from Optimize All modal.
+- [x] **Model Update**: Switched model to `meta-llama/llama-4-scout-17b-16e-instruct` for unified Text & Vision support.
 
-## In Progress / Planned
-- [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
-- [ ] **Premium**: Plan for "Pro" version with higher limits or advanced models.
+## In Progress / Debugging
+- [ ] **SEO Data Persistence**: Investigating why Llama 4 generated data is not saving (Suspect: JSON response wrapped in Markdown).
+- [ ] **Batch Loop**: Investigating "Generates then stops" behavior (Suspect: Worker loop timeout or PHP Error on invalid JSON).
 
 ## Architecture Notes
-- **AI Engine**: Groq (Llama 3.1 8B for Text, Llama 3.2 11B for Vision).
-- **Throttling**: Worker sleeps 2s between requests to stay under 30 RPM.
-- **State**: Batch process uses `_woosuite_seo_processed_at` to track progress and prevent loops.
-- **History**: Content changes are stored in `_woosuite_seo_history_title`, `_desc`, `_meta` to allow rollback.
+- **AI Engine**: Groq (Llama 4 Scout 17B - Unified Model).
+- **Throttling**: Worker sleeps 2s between requests.
+- **State**: Batch process uses `_woosuite_seo_processed_at` to track progress.
