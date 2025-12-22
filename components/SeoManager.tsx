@@ -52,7 +52,18 @@ const SeoManager: React.FC = () => {
   useEffect(() => {
       let interval: any;
       if (batchStatus?.status === 'running' || batchStatus?.status === 'paused') {
-          interval = setInterval(checkBatchStatus, 3000);
+          interval = setInterval(async () => {
+              const status = await checkBatchStatus();
+
+              // Heartbeat: If stuck for > 20s, kick it
+              if (status && status.status === 'running' && status.last_updated) {
+                  const ago = (Date.now() / 1000) - status.last_updated;
+                  if (ago > 20) {
+                      console.log("Batch heartbeat: Kicking process...", ago);
+                      resumeBatch();
+                  }
+              }
+          }, 3000);
       }
       // If finished, refresh data once
       if (batchStatus?.status === 'complete') {
@@ -66,7 +77,7 @@ const SeoManager: React.FC = () => {
   }, [activeTab, page, showUnoptimized, limit]);
 
   const checkBatchStatus = async () => {
-      if (!apiUrl) return;
+      if (!apiUrl) return null;
       try {
           const res = await fetch(`${apiUrl}/seo/batch-status`, {
               headers: { 'X-WP-Nonce': nonce }
@@ -74,8 +85,10 @@ const SeoManager: React.FC = () => {
           if (res.ok) {
               const data = await res.json();
               setBatchStatus(data);
+              return data;
           }
       } catch (e) { console.error(e); }
+      return null;
   };
 
   const handleScan = async () => {
@@ -527,7 +540,8 @@ const SeoManager: React.FC = () => {
                           else analysis.push({ label: 'Title too short or missing', pass: false });
 
                           // Desc Check
-                          if (item.metaDescription && item.metaDescription.length >= 120 && item.metaDescription.length <= 160) analysis.push({ label: 'Meta Desc Length (120-160)', pass: true });
+                          // Relaxed check: > 50 chars is considered "Good enough" if generated
+                          if (item.metaDescription && item.metaDescription.length >= 50 && item.metaDescription.length <= 160) analysis.push({ label: 'Meta Desc Length (50-160)', pass: true });
                           else if (item.metaDescription && item.metaDescription.length > 160) analysis.push({ label: 'Meta Desc too long', pass: false });
                           else analysis.push({ label: 'Meta Desc too short/missing', pass: false });
                       }
@@ -700,23 +714,6 @@ const SeoManager: React.FC = () => {
                           {activeTab === 'product' && <span className="text-sm text-purple-600 font-medium">✨ Includes automatic optimization of Product Images!</span>}
                       </p>
 
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                          <label className="flex items-start gap-3 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={rewriteTitles}
-                                onChange={(e) => setRewriteTitles(e.target.checked)}
-                                className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                              />
-                              <div>
-                                  <div className="font-medium text-gray-800">Simplify Product Names</div>
-                                  <div className="text-xs text-gray-500">
-                                      Use AI to rewrite and shorten product titles (Max 6 words).
-                                      <br/><span className="text-red-500 font-semibold">Warning: This overwrites your product titles.</span>
-                                  </div>
-                              </div>
-                          </label>
-                      </div>
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
                       <button
@@ -845,6 +842,15 @@ const SeoManager: React.FC = () => {
                                        <span key={idx} className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">{tag}</span>
                                    ))}
                                </div>
+                           </div>
+                       )}
+
+                       {previewItem.lastError && (
+                           <div className="bg-red-50 border border-red-200 rounded p-2">
+                               <div className="font-semibold text-red-800 mb-1 flex items-center gap-2">
+                                   <AlertTriangle size={12} /> Last Error
+                               </div>
+                               <div className="text-red-600">{previewItem.lastError}</div>
                            </div>
                        )}
                    </div>

@@ -41,6 +41,11 @@
 - [x] **Core Fix**: Implemented `WooSuite_Frontend` class to **Output Meta Tags** to `wp_head`, fixing verification issues.
 - [x] **SEO UI**: Added **Tags Display** to "View Data" modal.
 - [x] **Batch Fix**: "Resume" now triggers a synchronous batch step (Manual Trigger) to bypass stuck/disabled WP Cron.
+- [x] **UI**: Implemented **Collapsible Sidebar** for Desktop.
+- [x] **UI**: Added **Loading Spinner** to Content Enhancer Regenerate button.
+- [x] **Stability**: Added **Client-Side Heartbeat** to SEO Manager to auto-kick stalled batches.
+- [x] **Fix**: Relaxed SEO Badge logic (50 chars min) to correctly reflect AI-generated content status.
+- [x] **Fix**: Removed "Simplify Product Names" checkbox from Optimize All modal.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).
