@@ -22,7 +22,7 @@ class WooSuite_Groq {
         }
 
         $body = array(
-            'model' => 'llama-3.1-8b-instant',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'user',
@@ -83,7 +83,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'llama-3.1-8b-instant',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -130,7 +130,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'llama-3.1-8b-instant',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -152,44 +152,6 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
-        // TEXT-BASED OPTIMIZATION (Faster, Stable, Context-Aware)
-        // If we know the product context, we don't need to 'see' the image.
-        // We describe the image based on the product.
-        if ( ! empty( $product_context ) && is_array( $product_context ) ) {
-             $p_name = isset($product_context['name']) ? $product_context['name'] : '';
-             $p_desc = isset($product_context['description']) ? $product_context['description'] : '';
-
-             $prompt = "
-                Generate Alt Text and Title for an image of this product.
-
-                Product Name: $p_name
-                Product Description: $p_desc
-
-                1. Alt Text: Descriptive, accessible, relevant to the product. Max 125 chars.
-                2. Title: Clean, SEO-friendly title for the image file.
-
-                Return strictly JSON: { \"altText\": \"...\", \"title\": \"...\" }
-             ";
-
-            $body = array(
-                'model' => 'llama-3.1-8b-instant',
-                'messages' => array(
-                    array(
-                        'role' => 'system',
-                        'content' => 'You are an SEO expert. Output strictly JSON.'
-                    ),
-                    array(
-                        'role' => 'user',
-                        'content' => $prompt
-                    )
-                ),
-                'response_format' => array( 'type' => 'json_object' )
-            );
-
-            return $this->call_api( $body, true );
-        }
-
-        // VISION-BASED OPTIMIZATION (Fallback)
         // 1. Check Image Size (Prevent Memory Exhaustion)
         // Limit to 4MB (Groq Vision Limit & PHP Memory Safety)
         $head = wp_remote_head( $url, array( 'timeout' => 5, 'sslverify' => false ) );
@@ -230,8 +192,9 @@ class WooSuite_Groq {
             Return strictly JSON: { \"altText\": \"...\", \"title\": \"...\" }
         ";
 
+        // Use Llama 4 Scout (Multimodal) as Llama 3.2 Vision is deprecated
         $body = array(
-            'model' => 'llama-3.2-11b-vision-preview',
+            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
             'messages' => array(
                 array(
                     'role' => 'user',

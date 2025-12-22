@@ -444,6 +444,8 @@ class WooSuite_Seo_Worker {
             $args['post_type'] = 'attachment';
             $args['post_status'] = 'inherit';
             $args['post_mime_type'] = 'image';
+            // SKIP ORPHAN IMAGES (User Requirement: Only attached images)
+            $args['post_parent__not_in'] = array( 0 );
 
             // Image specific meta check
             $meta_query[] = array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' );
@@ -504,6 +506,8 @@ class WooSuite_Seo_Worker {
             $args['post_type'] = 'attachment';
             $args['post_status'] = 'inherit';
             $args['post_mime_type'] = 'image';
+            // SKIP ORPHAN IMAGES
+            $args['post_parent__not_in'] = array( 0 );
             $meta_query[] = array( 'key' => '_wp_attachment_image_alt', 'compare' => 'NOT EXISTS' );
         } else {
             $args['post_type'] = $type;
