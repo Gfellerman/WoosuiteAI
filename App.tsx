@@ -9,7 +9,7 @@ import OrderManager from './components/OrderManager';
 import BackupManager from './components/BackupManager';
 import EmailAutomation from './components/EmailAutomation';
 import Settings from './components/Settings';
-import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X, PenTool } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X, PenTool, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Initial Mock Data
 const initialProducts: Product[] = [];
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -58,10 +59,11 @@ const App: React.FC = () => {
         view === id 
           ? 'bg-purple-600 text-white shadow-md' 
           : 'text-gray-600 hover:bg-white hover:text-purple-600'
-      }`}
+      } ${isCollapsed ? 'justify-center' : ''}`}
+      title={isCollapsed ? label : ''}
     >
-      <Icon size={20} />
-      <span className="font-medium">{label}</span>
+      <Icon size={20} className="shrink-0" />
+      {!isCollapsed && <span className="font-medium whitespace-nowrap">{label}</span>}
     </button>
   );
 
@@ -78,14 +80,15 @@ const App: React.FC = () => {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out
         md:relative md:translate-x-0
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full'}
+        ${!isMobileMenuOpen && (isCollapsed ? 'md:w-20' : 'md:w-64')}
       `}>
-        <div className="p-6 flex items-center justify-between">
-           <div className="flex items-center gap-2 text-purple-700 font-bold text-xl">
-              <Box className="fill-current" />
-              <span>WooSuite AI</span>
+        <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+           <div className="flex items-center gap-2 text-purple-700 font-bold text-xl overflow-hidden">
+              <Box className="fill-current shrink-0" />
+              {!isCollapsed && <span>WooSuite AI</span>}
            </div>
            {/* Mobile Close Button */}
            <button
@@ -97,10 +100,11 @@ const App: React.FC = () => {
         </div>
 
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto overflow-x-hidden">
           <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
           
-          <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Features</div>
+          {!isCollapsed && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Features</div>}
+          {isCollapsed && <div className="h-4"></div>}
           <NavItem id="seo" label="AI SEO (GEO)" icon={Search} />
           <NavItem id="content-enhancer" label="Content Enhancer" icon={PenTool} />
           <NavItem id="security" label="Security & Firewall" icon={Shield} />
@@ -109,9 +113,20 @@ const App: React.FC = () => {
           <NavItem id="search" label="AI Search Config" icon={Search} />
           <NavItem id="backups" label="Cloud Backups" icon={Database} />
           
-          <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">System</div>
+          {!isCollapsed && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">System</div>}
+          {isCollapsed && <div className="h-4"></div>}
           <NavItem id="settings" label="Settings" icon={SettingsIcon} />
         </nav>
+
+        {/* Collapse Toggle (Desktop) */}
+        <div className="hidden md:flex p-4 border-t border-gray-200 justify-end">
+            <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-2 text-gray-500 hover:text-purple-600 hover:bg-gray-100 rounded transition"
+            >
+                {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            </button>
+        </div>
 
       </aside>
 

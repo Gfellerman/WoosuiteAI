@@ -394,7 +394,8 @@ const ContentEnhancer: React.FC = () => {
                                                         disabled={generating === item.id}
                                                         className="text-gray-500 hover:text-purple-600 text-xs flex items-center gap-1"
                                                     >
-                                                        <RotateCcw size={12} /> Regenerate
+                                                        {generating === item.id ? <Loader className="animate-spin" size={12} /> : <RotateCcw size={12} />}
+                                                        Regenerate
                                                     </button>
                                                 </>
                                             ) : (
