@@ -204,7 +204,7 @@ class WooSuite_Seo_Worker {
 
             return 'SUCCESS';
 
-        } catch ( Exception $e ) {
+        } catch ( Throwable $e ) { // Catch everything (Exceptions + Errors)
             $msg = $e->getMessage();
             $this->log( "Error processing ID {$id}: " . $msg );
 

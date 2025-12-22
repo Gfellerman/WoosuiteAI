@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
-import { performAiSearch } from '../services/geminiService';
 import { Search, Sliders, Zap } from 'lucide-react';
 
 interface AiSearchProps {
@@ -19,17 +18,13 @@ const AiSearch: React.FC<AiSearchProps> = ({ products }) => {
 
     setLoading(true);
     setSearched(true);
-    try {
-      const matchedIds = await performAiSearch(query, products);
-      const matchedProducts = products.filter(p => matchedIds.includes(p.id));
-      // Sort by the order returned by AI (relevance)
-      matchedProducts.sort((a, b) => matchedIds.indexOf(a.id) - matchedIds.indexOf(b.id));
-      setResults(matchedProducts);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+
+    // Mock Delay
+    setTimeout(() => {
+        setResults([]);
+        setLoading(false);
+        alert("AI Search Simulator is temporarily disabled during the engine migration.");
+    }, 1000);
   };
 
   return (
@@ -96,13 +91,13 @@ const AiSearch: React.FC<AiSearchProps> = ({ products }) => {
                     {loading && (
                         <div className="text-center py-12 text-gray-400">
                             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-purple-600 mb-2"></div>
-                            <p>Gemini is interpreting semantic meaning...</p>
+                            <p>Analyzing semantic meaning...</p>
                         </div>
                     )}
 
                     {!loading && searched && results.length === 0 && (
                         <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                            <p>No products matched that query.</p>
+                            <p>No products matched that query (Simulation Mode).</p>
                         </div>
                     )}
 

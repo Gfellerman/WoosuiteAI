@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Order } from '../types';
-import { generateEmailResponse } from '../services/geminiService';
 import { Mail, Send, X, MessageSquare } from 'lucide-react';
 
 interface OrderManagerProps {
@@ -20,18 +19,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders }) => {
   const handleGenerateDraft = async () => {
     if (!selectedOrder) return;
     setGenerating(true);
-    try {
+
+    // Placeholder logic since Gemini Service is removed
+    setTimeout(() => {
         const context = selectedOrder.customerNote 
-            ? `Customer Note: "${selectedOrder.customerNote}".` 
-            : `Order status is ${selectedOrder.status}.`;
+            ? `Regarding your note: "${selectedOrder.customerNote}"`
+            : `Order status is ${selectedOrder.status}`;
+
+        const draft = `Dear ${selectedOrder.customer},\n\nThank you for your order #${selectedOrder.id}.\n${context}\n\nWe appreciate your business!\n\nBest regards,\nSupport Team`;
         
-        const draft = await generateEmailResponse(selectedOrder.customer, selectedOrder.id, context);
         setEmailDraft(draft);
-    } catch (e) {
-        console.error(e);
-    } finally {
         setGenerating(false);
-    }
+    }, 800);
   };
 
   return (
@@ -86,6 +85,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders }) => {
                 </td>
               </tr>
             ))}
+            {orders.length === 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No orders found.</td></tr>
+            )}
           </tbody>
         </table>
       </div>
