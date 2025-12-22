@@ -15,9 +15,11 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq A
 *   **React:** Use functional components and Hooks. State management via local state or Context API.
 *   **CSS:** Tailwind CSS v4. Always use `@import "tailwindcss";` in CSS files.
 *   **Build:** Use `npm run build` to generate assets in `assets/`.
+*   **Assets:** The `assets/` directory (compiled JS/CSS) **MUST** be committed to the repository.
 
 ## SEO Module Instructions (Groq Engine)
-*   **Engine:** The plugin now uses **Groq** (Llama 3.1 8B Text, Llama 3.2 11B Vision) via `includes/class-woosuite-groq.php`.
+*   **Engine:** The plugin now uses **Groq** with `meta-llama/llama-4-scout-17b-16e-instruct` (Unified Text & Vision).
+*   **JSON Parsing (CRITICAL):** Llama 4 Scout often wraps JSON responses in Markdown code blocks (e.g., ` ```json ... ``` `) or adds conversational text. The API Client (`WooSuite_Groq`) MUST use robust Regex extraction (not just `json_decode` or simple `str_replace`) to parse responses correctly.
 *   **Batch Process:** The SEO Worker (`includes/class-woosuite-seo-worker.php`) runs in background batches.
 *   **Rate Limiting:** Groq Free Tier has ~30 RPM. The worker MUST implementation **Smart Throttling** (`sleep(2)`) between requests.
 *   **Failure Handling:**
