@@ -23,6 +23,7 @@ export interface ContentItem {
   imageUrl?: string;
   altText?: string;
   hasHistory?: boolean;
+  tags?: string[];
 }
 
 // Alias for backward compatibility
