@@ -38,6 +38,9 @@
 - [x] **SEO UI**: Added **View Data** button to item rows, allowing users to verify stored SEO data (Title, Meta, Alt) directly.
 - [x] **Stability**: Implemented **Hybrid Batch Strategy** (Client-Side Loop for < 50 items, Background Worker for >= 50) to ensure reliability for small batches.
 - [x] **Fix**: Corrected **Resume Logic** to preserve existing filters (preventing "Resume" from optimizing all 3700 items instead of selected 20).
+- [x] **Core Fix**: Implemented `WooSuite_Frontend` class to **Output Meta Tags** to `wp_head`, fixing verification issues.
+- [x] **SEO UI**: Added **Tags Display** to "View Data" modal.
+- [x] **Batch Fix**: "Resume" now triggers a synchronous batch step (Manual Trigger) to bypass stuck/disabled WP Cron.
 
 ## In Progress / Planned
 - [ ] **Security**: Investigate **Llama Guard** integration for AI-powered WAF (Comment/Spam filtering).

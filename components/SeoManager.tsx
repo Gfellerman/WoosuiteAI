@@ -836,6 +836,17 @@ const SeoManager: React.FC = () => {
                                <div className="p-2 bg-gray-50 border border-gray-200 rounded text-gray-800">{previewItem.altText}</div>
                            </div>
                        )}
+
+                       {previewItem.tags && previewItem.tags.length > 0 && (
+                           <div>
+                               <div className="font-semibold text-gray-500 mb-1">Tags</div>
+                               <div className="flex flex-wrap gap-1">
+                                   {previewItem.tags.map((tag, idx) => (
+                                       <span key={idx} className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">{tag}</span>
+                                   ))}
+                               </div>
+                           </div>
+                       )}
                    </div>
 
                    <div className="mt-6 flex justify-end">

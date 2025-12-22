@@ -324,8 +324,15 @@ class WooSuite_Api {
                 'proposedShortDescription' => get_post_meta( $post->ID, '_woosuite_proposed_short_description', true ),
                 'hasHistory' => ! empty( get_post_meta( $post->ID, '_woosuite_history_post_content', true ) ) ||
                                 ! empty( get_post_meta( $post->ID, '_woosuite_history__woosuite_meta_description', true ) ) ||
-                                ! empty( get_post_meta( $post->ID, '_woosuite_history__wp_attachment_image_alt', true ) )
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history__wp_attachment_image_alt', true ) ),
+                'tags' => array()
             );
+
+            $taxonomy = ($type === 'product') ? 'product_tag' : 'post_tag';
+            $terms = get_the_terms( $post->ID, $taxonomy );
+            if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+                $item['tags'] = wp_list_pluck( $terms, 'name' );
+            }
 
             // Add Image specific data
             if ( $type === 'image' ) {
@@ -809,7 +816,13 @@ class WooSuite_Api {
         }
         $worker = new WooSuite_Seo_Worker();
         $worker->resume_batch();
-        return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch resumed' ), 200 );
+
+        // Attempt to run one batch cycle immediately (Manual Trigger)
+        // This helps if WP Cron is stuck or disabled.
+        // The worker will run for ~25s and then return.
+        $worker->process_batch();
+
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch resumed and triggered' ), 200 );
     }
 
     public function start_seo_batch( $request ) {

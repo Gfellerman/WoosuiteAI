@@ -31,6 +31,9 @@ class WooSuite_Core {
         // Load the Security class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-security.php';
 
+        // Load the Frontend Output class
+        require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-frontend.php';
+
         // Load the Sitemap class
         require_once WOOSUITE_AI_PATH . 'includes/class-woosuite-sitemap.php';
 
@@ -47,6 +50,11 @@ class WooSuite_Core {
         // Load Security Quarantine
         require_once WOOSUITE_AI_PATH . 'includes/security/class-woosuite-security-quarantine.php';
 	}
+
+    private function define_frontend_hooks() {
+        $plugin_frontend = new WooSuite_Frontend( $this->plugin_name, $this->version );
+        $plugin_frontend->init();
+    }
 
     private function define_sitemap_hooks() {
         $plugin_sitemap = new WooSuite_Sitemap( $this->plugin_name, $this->version );
@@ -78,6 +86,7 @@ class WooSuite_Core {
 
 	public function run() {
         $this->define_security_hooks();
+        $this->define_frontend_hooks();
         $this->define_sitemap_hooks();
         $this->define_llm_txt_hooks();
 
