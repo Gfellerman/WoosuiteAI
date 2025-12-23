@@ -250,12 +250,22 @@ class WooSuite_Groq {
         if ( $json_mode ) {
             // Updated Robust JSON Extraction for Llama 4
             $extracted_json = $this->extract_json_from_text( $content );
+
+            // Attempt basic decode
             $json = json_decode( $extracted_json, true );
+
+            // If basic decode fails, try to clean up common LLM JSON errors (like trailing commas)
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                $cleaned_json = $this->cleanup_json_syntax( $extracted_json );
+                $json = json_decode( $cleaned_json, true );
+            }
 
             if ( json_last_error() !== JSON_ERROR_NONE ) {
                  // Debug log for failed extractions
-                 error_log( 'WooSuite JSON Fail. Original: ' . $content . ' | Extracted: ' . $extracted_json );
-                 return new WP_Error( 'json_error', 'Invalid JSON from Groq: ' . $content );
+                 error_log( 'WooSuite JSON Fail. Error: ' . json_last_error_msg() );
+                 error_log( 'Original: ' . $content );
+                 error_log( 'Extracted: ' . $extracted_json );
+                 return new WP_Error( 'json_error', 'Invalid JSON from Groq. See System Logs for details.' );
             }
             return $json;
         }
@@ -284,5 +294,20 @@ class WooSuite_Groq {
 
         // 3. Fallback: Return original
         return $text;
+    }
+
+    /**
+     * Cleans common JSON syntax errors from LLM output
+     */
+    private function cleanup_json_syntax( $json ) {
+        // Remove trailing commas before closing braces/brackets
+        // Regex: , (whitespace) }  ->  }
+        $json = preg_replace( '/,\s*([\}\]])/', '$1', $json );
+
+        // Ensure keys are quoted (if missing) - Simple case
+        // $json = preg_replace( '/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/', '$1"$2"$3', $json );
+        // (Commented out as it's risky with content containing colons, but trailing commas are the main culprit)
+
+        return $json;
     }
 }
