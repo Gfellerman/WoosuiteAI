@@ -49,8 +49,12 @@
 - [x] **Model Update**: Switched model to `meta-llama/llama-4-scout-17b-16e-instruct` for unified Text & Vision support.
 
 ## In Progress / Debugging
-- [ ] **SEO Data Persistence**: Investigating why Llama 4 generated data is not saving (Suspect: JSON response wrapped in Markdown).
-- [ ] **Batch Loop**: Investigating "Generates then stops" behavior (Suspect: Worker loop timeout or PHP Error on invalid JSON).
+- [x] **SEO Data Persistence**: Implemented robust **JSON Extraction** and **Syntax Cleanup** (trailing commas) to handle Llama 4 Markdown output.
+- [x] **Build Fix**: Added `browserslist` to `package.json` to fix critical submission error.
+- [x] **Stability**: Improved `WooSuite_Groq` error logging to capture exact raw response when JSON parsing fails.
+
+## In Progress / Debugging
+- [ ] **Verification**: Waiting for user confirmation that Batch SEO is now stable and saving correctly.
 
 ## Architecture Notes
 - **AI Engine**: Groq (Llama 4 Scout 17B - Unified Model).
