@@ -9,11 +9,6 @@ class WooSuite_Groq {
         // We reuse the existing option key to preserve user input
         // if they already pasted the Groq key into the 'Gemini' field.
         $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
-
-        // TODO: REMOVE THIS KEY BEFORE PUBLIC RELEASE - FALLBACK FOR USER TESTING
-        // if ( empty( $this->api_key ) ) {
-        //     $this->api_key = 'gsk_...'; // User's key (redacted here as I don't have it in this session)
-        // }
     }
 
     public function test_connection() {
@@ -253,19 +248,41 @@ class WooSuite_Groq {
         $content = $data['choices'][0]['message']['content'];
 
         if ( $json_mode ) {
-            $json = json_decode( $content, true );
-            if ( json_last_error() !== JSON_ERROR_NONE ) {
-                // Sometimes models add markdown backticks
-                $content = str_replace( array( '```json', '```' ), '', $content );
-                $json = json_decode( $content, true );
+            // Updated Robust JSON Extraction for Llama 4
+            $extracted_json = $this->extract_json_from_text( $content );
+            $json = json_decode( $extracted_json, true );
 
-                if ( json_last_error() !== JSON_ERROR_NONE ) {
-                     return new WP_Error( 'json_error', 'Invalid JSON from Groq: ' . $content );
-                }
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                 // Debug log for failed extractions
+                 error_log( 'WooSuite JSON Fail. Original: ' . $content . ' | Extracted: ' . $extracted_json );
+                 return new WP_Error( 'json_error', 'Invalid JSON from Groq: ' . $content );
             }
             return $json;
         }
 
         return array( 'status' => $code, 'raw_response' => $data, 'content' => $content );
+    }
+
+    /**
+     * Extracts strictly the JSON part from a text response.
+     * Handles Markdown code blocks and conversational text.
+     */
+    private function extract_json_from_text( $text ) {
+        // 1. Try to find JSON block inside Markdown code block (```json ... ``` or ``` ... ```)
+        // using 's' modifier for multiline support (DOTALL)
+        if ( preg_match( '/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches ) ) {
+            return $matches[1];
+        }
+
+        // 2. If no code block, try to find the first '{' and last '}'
+        $start = strpos( $text, '{' );
+        $end = strrpos( $text, '}' );
+
+        if ( $start !== false && $end !== false && $end > $start ) {
+            return substr( $text, $start, $end - $start + 1 );
+        }
+
+        // 3. Fallback: Return original
+        return $text;
     }
 }

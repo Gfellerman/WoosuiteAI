@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { generateMarketingContent } from '../services/geminiService';
 import { Mail, Plus, Play, Pause, Trash2, Send, Sparkles, Megaphone } from 'lucide-react';
 import { EmailRule } from '../types';
 
@@ -24,14 +23,13 @@ const EmailAutomation: React.FC = () => {
   const handleGenerateCampaign = async () => {
     if (!marketingTopic || !marketingAudience) return;
     setGenerating(true);
-    try {
-        const content = await generateMarketingContent(marketingTopic, marketingAudience, 'email');
+
+    // Placeholder - Gemini Service Removed
+    setTimeout(() => {
+        const content = `Subject: Don't miss out on ${marketingTopic}!\n\nHi there,\n\nWe noticed you are one of our valued ${marketingAudience}.\nWe are excited to announce our ${marketingTopic} event tailored just for you.\n\nShop now and save!\n\nBest,\nThe Store Team`;
         setGeneratedContent(content);
-    } catch (e) {
-        console.error(e);
-    } finally {
         setGenerating(false);
-    }
+    }, 1000);
   };
 
   return (
