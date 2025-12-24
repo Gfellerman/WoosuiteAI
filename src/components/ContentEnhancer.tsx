@@ -38,6 +38,8 @@ const ContentEnhancer: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    // Clear items immediately to prevent UI flicker/confusion when filter changes
+    setItems([]);
     fetchItems();
   }, [activeTab, page, limit, category, status]);
 

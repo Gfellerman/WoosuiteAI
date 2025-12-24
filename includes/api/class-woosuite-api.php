@@ -252,11 +252,28 @@ class WooSuite_Api {
                 array(
                     'taxonomy' => $taxonomy,
                     'field' => 'term_id',
-                    'terms' => $category,
-                    'include_children' => true // Include subcategories as requested
+                    'terms' => intval($category), // Strict casting
+                    'include_children' => true
                 )
             );
         }
+
+        // --- DEBUG LOGGING START ---
+        // Log the constructed query to help debug filter issues (e.g., recursive categories)
+        $debug_logs = get_option('woosuite_debug_log', array());
+        $debug_entry = array(
+            'time' => date('Y-m-d H:i:s'),
+            'type' => 'DEBUG',
+            'message' => 'API Query Args: ' . json_encode(array(
+                'tax_query' => isset($args['tax_query']) ? $args['tax_query'] : 'none',
+                'category_param' => $category,
+                'post_type' => $type
+            ))
+        );
+        array_unshift($debug_logs, $debug_entry);
+        if (count($debug_logs) > 50) array_pop($debug_logs);
+        update_option('woosuite_debug_log', $debug_logs);
+        // --- DEBUG LOGGING END ---
 
         $meta_query = array();
 
@@ -680,10 +697,14 @@ class WooSuite_Api {
         $type = $request->get_param('type') ?: 'product';
         $taxonomy = ($type === 'product') ? 'product_cat' : 'category';
 
+        // For image type, we technically don't have categories,
+        // but maybe the user wants to filter by attached post's category?
+        // For now, let's keep it simple: products -> product_cat, others -> category
+
         $terms = get_terms( array(
             'taxonomy' => $taxonomy,
             'hide_empty' => false,
-            'parent' => 0 // Only main categories
+            'parent' => 0 // Start with main categories, user can't drill down deeper yet in UI
         ) );
 
         if ( is_wp_error( $terms ) ) {
