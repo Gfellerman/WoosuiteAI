@@ -284,15 +284,44 @@ class WooSuite_Groq {
             return $matches[1];
         }
 
-        // 2. If no code block, try to find the first '{' and last '}'
-        $start = strpos( $text, '{' );
-        $end = strrpos( $text, '}' );
+        // 2. Brute-force JSON finder (Recursive-ish loop)
+        // This handles cases where there is a preamble with braces before the actual JSON object.
+        // e.g., "I used the context {foo} to generate: { "title": ... }"
 
-        if ( $start !== false && $end !== false && $end > $start ) {
-            return substr( $text, $start, $end - $start + 1 );
+        $offset = 0;
+        $max_attempts = 5; // Prevent infinite loops on massive text
+        $attempt = 0;
+
+        while ( ($start = strpos( $text, '{', $offset )) !== false && $attempt < $max_attempts ) {
+            $end = strrpos( $text, '}' ); // Look for the last brace in the WHOLE string
+
+            if ( $end !== false && $end > $start ) {
+                $candidate = substr( $text, $start, $end - $start + 1 );
+
+                // Fast Validation Check before full decode (Optimization)
+                // We expect specific keys based on the task, but let's just trust json_decode for now.
+                // Or better, check if the candidate *looks* like our expected schema?
+                // No, generic JSON validation is safer.
+
+                // Attempt decode
+                json_decode( $candidate );
+                if ( json_last_error() === JSON_ERROR_NONE ) {
+                    return $candidate;
+                }
+            }
+
+            // If failed, try finding the next opening brace
+            $offset = $start + 1;
+            $attempt++;
         }
 
-        // 3. Fallback: Return original
+        // 3. Fallback: Return original if nothing found (or if simple case)
+        $start = strpos( $text, '{' );
+        $end = strrpos( $text, '}' );
+        if ( $start !== false && $end !== false && $end > $start ) {
+             return substr( $text, $start, $end - $start + 1 );
+        }
+
         return $text;
     }
 

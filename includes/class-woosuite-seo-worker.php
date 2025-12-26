@@ -12,10 +12,16 @@ class WooSuite_Seo_Worker {
     }
 
     private function log( $message ) {
+        // TRUNCATE MESSAGE to prevent massive log files from crashing the UI
+        // If message is > 500 chars, truncate it.
+        if ( strlen( $message ) > 500 ) {
+            $message = substr( $message, 0, 500 ) . '... [TRUNCATED]';
+        }
+
         $timestamp = current_time( 'mysql' );
         $entry = "[$timestamp] [SEO Worker] $message";
 
-        // Log to server error log
+        // Log to server error log (full message if possible, but keeping it safe)
         error_log( $entry );
 
         // Log to DB for UI display (keep last 50 lines)
@@ -75,37 +81,38 @@ class WooSuite_Seo_Worker {
     }
 
     public function process_batch() {
-        // Cleanup stuck items (older than 10 mins)
-        $this->cleanup_stuck_items();
-
-        if ( function_exists( 'set_time_limit' ) ) set_time_limit( 300 );
-
-        if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
-            $this->stop_batch("Process stopped by user.");
-            return;
-        }
-
-        $status = get_option( 'woosuite_seo_batch_status' );
-
-        // If status is 'paused', it means we were called by the scheduler to RESUME.
-        // So we switch back to 'running'.
-        if ( isset( $status['status'] ) && $status['status'] === 'paused' ) {
-            $status['status'] = 'running';
-            $status['message'] = 'Resuming after rate limit pause...';
-            update_option( 'woosuite_seo_batch_status', $status );
-            $this->log( "Resuming batch after pause..." );
-        } elseif ( ! $status || $status['status'] !== 'running' ) {
-            return;
-        }
-
-        $status['last_updated'] = time();
-        update_option( 'woosuite_seo_batch_status', $status );
-
-        $start_time = microtime( true );
-        // Groq is fast, but we limit execution time to keep the server happy
-        $max_execution_time = 25;
-
+        // WRAP ENTIRE WORKER IN TRY/CATCH TO PREVENT SILENT DEATH
         try {
+            // Cleanup stuck items (older than 10 mins)
+            $this->cleanup_stuck_items();
+
+            if ( function_exists( 'set_time_limit' ) ) set_time_limit( 300 );
+
+            if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
+                $this->stop_batch("Process stopped by user.");
+                return;
+            }
+
+            $status = get_option( 'woosuite_seo_batch_status' );
+
+            // If status is 'paused', it means we were called by the scheduler to RESUME.
+            // So we switch back to 'running'.
+            if ( isset( $status['status'] ) && $status['status'] === 'paused' ) {
+                $status['status'] = 'running';
+                $status['message'] = 'Resuming after rate limit pause...';
+                update_option( 'woosuite_seo_batch_status', $status );
+                $this->log( "Resuming batch after pause..." );
+            } elseif ( ! $status || $status['status'] !== 'running' ) {
+                return;
+            }
+
+            $status['last_updated'] = time();
+            update_option( 'woosuite_seo_batch_status', $status );
+
+            $start_time = microtime( true );
+            // Groq is fast, but we limit execution time to keep the server happy
+            $max_execution_time = 25;
+
             while ( ( microtime( true ) - $start_time ) < $max_execution_time ) {
 
                 if ( get_option( 'woosuite_seo_batch_stop_signal' ) ) {
@@ -162,10 +169,11 @@ class WooSuite_Seo_Worker {
                 // We add a slight buffer (2s)
                 sleep(2);
             }
-        } catch ( Exception $e ) {
-            $this->log( "CRITICAL BATCH ERROR: " . $e->getMessage() );
-        } catch ( Throwable $e ) {
-             $this->log( "FATAL BATCH ERROR: " . $e->getMessage() );
+        } catch ( Throwable $e ) { // Catch global Throwable to ensure nothing escapes
+             $this->log( "FATAL BATCH WORKER ERROR: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() );
+             // Mark batch as stopped or failed? Maybe keep running to retry?
+             // Ideally we stop to prevent infinite crash loops.
+             $this->stop_batch("Stopped due to internal error. Check logs.");
         }
 
         // Reschedule if still running (and not paused by rate limit)
