@@ -55,15 +55,23 @@ const SeoManager: React.FC = () => {
           interval = setInterval(async () => {
               const status = await checkBatchStatus();
 
-              // Heartbeat: If stuck for > 20s, kick it
-              if (status && status.status === 'running' && status.last_updated) {
+              // Heartbeat Logic:
+              // 1. If 'running' but no update for > 25s, backend might have died. Kick it.
+              // 2. If 'paused' (Rate Limit) and > 70s passed (Groq limit ~60s), Kick it.
+              if (status && status.last_updated) {
                   const ago = (Date.now() / 1000) - status.last_updated;
-                  if (ago > 20) {
-                      console.log("Batch heartbeat: Kicking process...", ago);
+
+                  if (status.status === 'running' && ago > 25) {
+                      console.log("Batch heartbeat: Process stuck (running). Kicking...", ago);
+                      resumeBatch();
+                  }
+
+                  if (status.status === 'paused' && ago > 70) {
+                      console.log("Batch heartbeat: Auto-resume from Rate Limit...", ago);
                       resumeBatch();
                   }
               }
-          }, 3000);
+          }, 5000); // Poll every 5s is enough
       }
       // If finished, refresh data once
       if (batchStatus?.status === 'complete') {
@@ -507,14 +515,17 @@ const SeoManager: React.FC = () => {
                         className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                     />
                 </td>
-                <td className="p-4 align-top w-1/4">
+                <td className="p-4 align-top w-1/3">
                   <div className="flex gap-3">
                       {activeTab === 'image' && item.imageUrl && (
                           <img src={item.imageUrl} alt={item.altText} className="w-12 h-12 rounded object-cover border border-gray-200" />
                       )}
                       <div>
-                          <div className="font-medium text-gray-800">{item.name}</div>
-                          <div className="text-xs text-gray-500 mt-1 line-clamp-1">{item.description || 'No description'}</div>
+                          <div className="font-medium text-gray-800 break-words">{item.name}</div>
+                          <div className="text-xs text-gray-500 mt-1 break-words leading-relaxed">
+                              {/* Removed line-clamp-1 to show full description as requested */}
+                              {item.description || 'No description'}
+                          </div>
                       </div>
                   </div>
                 </td>
@@ -602,7 +613,7 @@ const SeoManager: React.FC = () => {
                        )
                    )}
                 </td>
-                <td className="p-4 align-top text-right w-1/6">
+                <td className="p-4 align-top text-right min-w-[160px]">
                   <div className="flex flex-col gap-2 items-end">
                     <button
                         onClick={() => handleGenerate(item)}
