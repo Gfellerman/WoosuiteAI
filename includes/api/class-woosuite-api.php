@@ -195,6 +195,9 @@ class WooSuite_Api {
 
     public function get_system_logs( $request ) {
         $logs = get_option( 'woosuite_debug_log', array() );
+        if ( is_array( $logs ) && count( $logs ) > 100 ) {
+            $logs = array_slice( $logs, 0, 100 );
+        }
         return new WP_REST_Response( array( 'logs' => $logs ), 200 );
     }
 
@@ -891,7 +894,7 @@ class WooSuite_Api {
         $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_last_error'" );
         $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key = '_woosuite_seo_processed_at'" );
 
-        // Clear Logs
+        // Clear Logs - Reset to empty array to fix crash
         update_option( 'woosuite_debug_log', array() );
 
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Reset complete' ), 200 );
