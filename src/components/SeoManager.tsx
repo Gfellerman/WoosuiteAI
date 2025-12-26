@@ -271,28 +271,62 @@ const SeoManager: React.FC = () => {
       setIsClientBatch(true);
       setClientBatchProgress({ current: 0, total: selectedIds.length, failed: 0 });
 
+      // Helper for sleep
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
       for (let i = 0; i < selectedIds.length; i++) {
           const id = selectedIds[i];
           const item = items.find(p => p.id === id);
-          if (item) {
+
+          if (!item) {
+              setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
+              continue;
+          }
+
+          let retries = 0;
+          let success = false;
+
+          while (!success && retries < 2) {
              try {
                 const res = await fetch(`${apiUrl}/seo/generate/${id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
                     body: JSON.stringify({ rewriteTitle: false })
                 });
+
+                if (res.status === 429) {
+                    console.warn(`Rate Limit Hit for ID ${id}. Pausing for 65s...`);
+                    // Update UI or state if possible to show "Paused"
+                    // (We can assume the user sees the progress bar stalled)
+                    await sleep(65000); // Wait 65 seconds
+                    retries++;
+                    continue; // Retry same item
+                }
+
                 if (!res.ok) throw new Error("Failed");
 
                 const json = await res.json();
                 if (json.success && json.data) {
                     const updates = mapResultToItem(json.data, item.type);
                     setItems(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+                    success = true;
+                } else {
+                    throw new Error(json.message || "Unknown error");
                 }
              } catch (e) {
+                 console.error(e);
+                 // If not a rate limit (handled above), it's a real fail
                  setClientBatchProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
+                 break; // Stop retrying this item
              }
           }
+
           setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
+
+          // Smart Throttle: Sleep 2s between items to prevent hitting limits
+          if (i < selectedIds.length - 1) {
+              await sleep(2000);
+          }
       }
       setIsClientBatch(false);
       setSelectedIds([]);

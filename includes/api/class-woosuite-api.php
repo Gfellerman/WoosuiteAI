@@ -264,15 +264,14 @@ class WooSuite_Api {
         // --- DEBUG LOGGING START ---
         // Log the constructed query to help debug filter issues (e.g., recursive categories)
         $debug_logs = get_option('woosuite_debug_log', array());
-        $debug_entry = array(
-            'time' => date('Y-m-d H:i:s'),
-            'type' => 'DEBUG',
-            'message' => 'API Query Args: ' . json_encode(array(
-                'tax_query' => isset($args['tax_query']) ? $args['tax_query'] : 'none',
-                'category_param' => $category,
-                'post_type' => $type
-            ))
-        );
+        $debug_msg = 'API Query Args: ' . json_encode(array(
+            'tax_query' => isset($args['tax_query']) ? $args['tax_query'] : 'none',
+            'category_param' => $category,
+            'post_type' => $type
+        ));
+        $timestamp = date('Y-m-d H:i:s');
+        $debug_entry = "[$timestamp] [DEBUG] $debug_msg";
+
         array_unshift($debug_logs, $debug_entry);
         if (count($debug_logs) > 50) array_pop($debug_logs);
         update_option('woosuite_debug_log', $debug_logs);
@@ -870,6 +869,10 @@ class WooSuite_Api {
         }
         $worker = new WooSuite_Seo_Worker();
         $worker->start_batch( $filters );
+
+        // KICKSTART: Run one batch cycle immediately to bypass potential WP Cron issues
+        $worker->process_batch();
+
         return new WP_REST_Response( array( 'success' => true, 'message' => 'Batch started' ), 200 );
     }
 

@@ -369,6 +369,11 @@ class WooSuite_Seo_Worker {
                 // Use Text-Based Generation (Passed Context)
                 $result = $this->groq->generate_image_seo( $url, $product_name, $context );
 
+                    // Check for Rate Limit in Image Loop
+                    if ( is_wp_error( $result ) && $result->get_error_code() === 'rate_limit' ) {
+                         throw new Exception( 'RATE_LIMIT_HIT' );
+                    }
+
                 if ( ! is_wp_error( $result ) && ! empty( $result['altText'] ) ) {
                     update_post_meta( $img_id, '_wp_attachment_image_alt', sanitize_text_field( $result['altText'] ) );
 
@@ -384,9 +389,13 @@ class WooSuite_Seo_Worker {
                 }
 
                 // Sleep briefly to avoid hammering the API if product has many images
-                sleep(1);
+                    sleep(2);
 
             } catch ( Exception $e ) {
+                    if ( $e->getMessage() === 'RATE_LIMIT_HIT' ) {
+                         // Re-throw so the parent process can handle the pause
+                         throw $e;
+                    }
                 $this->log( "Failed to optimize image {$img_id}: " . $e->getMessage() );
             }
         }
