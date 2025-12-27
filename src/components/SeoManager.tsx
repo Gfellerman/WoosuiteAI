@@ -20,10 +20,7 @@ const SeoManager: React.FC = () => {
   // Bulk Optimization (Selection)
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // Background Batch (Server Side)
-  const [batchStatus, setBatchStatus] = useState<any>(null);
-  const [showProcessModal, setShowProcessModal] = useState(false);
-  const [showStartModal, setShowStartModal] = useState(false);
+  // Batch Options
   const [rewriteTitles, setRewriteTitles] = useState(false);
 
   // Sitemap
@@ -43,61 +40,9 @@ const SeoManager: React.FC = () => {
 
   const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
-  // Initial Poll Check
-  useEffect(() => {
-      checkBatchStatus();
-  }, []);
-
-  // Poll when running or paused
-  useEffect(() => {
-      let interval: any;
-      if (batchStatus?.status === 'running' || batchStatus?.status === 'paused') {
-          interval = setInterval(async () => {
-              const status = await checkBatchStatus();
-
-              // Heartbeat Logic:
-              // 1. If 'running' but no update for > 25s, backend might have died. Kick it.
-              // 2. If 'paused' (Rate Limit) and > 70s passed (Groq limit ~60s), Kick it.
-              if (status && status.last_updated) {
-                  const ago = (Date.now() / 1000) - status.last_updated;
-
-                  if (status.status === 'running' && ago > 25) {
-                      console.log("Batch heartbeat: Process stuck (running). Kicking...", ago);
-                      resumeBatch();
-                  }
-
-                  if (status.status === 'paused' && ago > 70) {
-                      console.log("Batch heartbeat: Auto-resume from Rate Limit...", ago);
-                      resumeBatch();
-                  }
-              }
-          }, 5000); // Poll every 5s is enough
-      }
-      // If finished, refresh data once
-      if (batchStatus?.status === 'complete') {
-          fetchItems();
-      }
-      return () => clearInterval(interval);
-  }, [batchStatus?.status]);
-
   useEffect(() => {
     fetchItems();
   }, [activeTab, page, showUnoptimized, limit]);
-
-  const checkBatchStatus = async () => {
-      if (!apiUrl) return null;
-      try {
-          const res = await fetch(`${apiUrl}/seo/batch-status`, {
-              headers: { 'X-WP-Nonce': nonce }
-          });
-          if (res.ok) {
-              const data = await res.json();
-              setBatchStatus(data);
-              return data;
-          }
-      } catch (e) { console.error(e); }
-      return null;
-  };
 
   const handleScan = async () => {
       setScanning(true);
@@ -144,66 +89,7 @@ const SeoManager: React.FC = () => {
     }
   };
 
-  const startBackgroundBatch = async (ids: number[] = []) => {
-      if (!apiUrl) return;
-      try {
-          const res = await fetch(`${apiUrl}/seo/batch`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-              body: JSON.stringify({
-                  rewriteTitles,
-                  type: activeTab,
-                  ids: ids
-              })
-          });
-          if (res.ok) {
-              await checkBatchStatus();
-              setShowProcessModal(true);
-              setShowStartModal(false);
-              fetchItems();
-          }
-      } catch (e) {
-          console.error("Failed to start batch", e);
-      }
-  };
-
-  const resumeBatch = async () => {
-      if (!apiUrl) return;
-      try {
-          const res = await fetch(`${apiUrl}/seo/batch/resume`, {
-              method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
-          });
-          if (res.ok) {
-              await checkBatchStatus();
-          }
-      } catch (e) { console.error(e); }
-  };
-
-  const stopBackgroundBatch = async () => {
-      if (!apiUrl) return;
-      try {
-          await fetch(`${apiUrl}/seo/batch/stop`, {
-              method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
-          });
-          // Update status immediately for UI responsiveness
-          setBatchStatus((prev: any) => ({ ...prev, status: 'stopped', message: 'Stopping...' }));
-      } catch (e) { console.error(e); }
-  };
-
-  const resetBackgroundBatch = async () => {
-      if (!apiUrl) return;
-      if (!confirm("Are you sure? This will force the process status to 'idle' and CLEAR all error flags. Use this if the process is stuck.")) return;
-      try {
-          await fetch(`${apiUrl}/seo/batch/reset`, {
-              method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
-          });
-          checkBatchStatus();
-          fetchItems(); // Refresh list to remove error badges
-      } catch (e) { console.error(e); }
-  };
+  // Legacy Background Batch removed. Now pure Client-Side.
 
   const handleTabChange = (tab: ContentType) => {
       if (tab === activeTab) return;
@@ -258,31 +144,58 @@ const SeoManager: React.FC = () => {
 
   const handleBulkOptimize = async () => {
       if (selectedIds.length === 0) return;
+      startClientBatch(selectedIds);
+  };
 
-      if (selectedIds.length < 50) {
-          startClientBatch();
-      } else {
-          await startBackgroundBatch(selectedIds);
-          setSelectedIds([]);
+  const handleOptimizeAll = async () => {
+      if (!apiUrl) return;
+      if (!confirm(`This will fetch up to 500 unoptimized ${activeTab}s and process them in this browser window. You must keep the tab open.`)) return;
+
+      setLoading(true);
+      try {
+          // Fetch up to 500 unoptimized IDs
+          const res = await fetch(`${apiUrl}/content?type=${activeTab}&filter=unoptimized&fields=ids&limit=500`, {
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          if (res.ok) {
+              const data = await res.json();
+              if (data.ids && data.ids.length > 0) {
+                  // We have IDs, start the batch
+                  // Note: We might not have the item objects in 'items' state if they are on other pages.
+                  // startClientBatch needs to handle 'missing' items by fetching them or just assuming we want to optimize blindly?
+                  // Actually, startClientBatch uses `items.find` which relies on local state.
+                  // We need to fetch the item data OR modify startClientBatch to handle ID-only.
+                  // For simplicity/speed: We just have IDs. We should just call generate endpoint.
+                  // The generate endpoint (POST /seo/generate/ID) returns the new data.
+                  // So we don't strictly need the item object *before* we call generate,
+                  // BUT we need it to update the table state if it happens to be visible.
+
+                  // Let's pass the IDs to startClientBatch and make it robust.
+                  startClientBatch(data.ids);
+              } else {
+                  alert("No unoptimized items found!");
+              }
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Failed to fetch unoptimized items.");
+      } finally {
+          setLoading(false);
       }
   };
 
-  const startClientBatch = async () => {
+  const startClientBatch = async (idsToProcess: number[]) => {
       setIsClientBatch(true);
-      setClientBatchProgress({ current: 0, total: selectedIds.length, failed: 0 });
+      setClientBatchProgress({ current: 0, total: idsToProcess.length, failed: 0 });
 
       // Helper for sleep
       const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-      for (let i = 0; i < selectedIds.length; i++) {
-          const id = selectedIds[i];
-          const item = items.find(p => p.id === id);
+      for (let i = 0; i < idsToProcess.length; i++) {
+          const id = idsToProcess[i];
 
-          if (!item) {
-              setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
-              continue;
-          }
-
+          // Removed item check because we might process IDs not in current view (Optimize All)
+          // The API call works with just ID.
           let retries = 0;
           let success = false;
 
@@ -307,7 +220,7 @@ const SeoManager: React.FC = () => {
 
                 const json = await res.json();
                 if (json.success && json.data) {
-                    const updates = mapResultToItem(json.data, item.type);
+                    const updates = mapResultToItem(json.data, activeTab);
                     setItems(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
                     success = true;
                 } else {
@@ -357,67 +270,6 @@ const SeoManager: React.FC = () => {
   return (
     <div className="space-y-6">
 
-      {/* Background Process Banner */}
-      {(batchStatus?.status === 'running' || batchStatus?.status === 'paused') && (
-          <div className={`rounded-lg p-4 text-white shadow-md flex items-center justify-between ${batchStatus.status === 'paused' ? 'bg-amber-500' : 'bg-gradient-to-r from-purple-500 to-indigo-600'}`}>
-              <div className="flex items-center gap-3">
-                  {batchStatus.status === 'paused' ? <Loader className="animate-spin" /> : <RefreshCw className="animate-spin" />}
-                  <div>
-                      <div className="font-bold">
-                          {batchStatus.status === 'paused' ? 'Optimization Paused (Rate Limit)' : 'Background Optimization Running'}
-                      </div>
-                      <div className="text-sm opacity-90">
-                          {batchStatus.status === 'paused'
-                            ? 'Hit API limit. Auto-resuming in ~60 seconds...'
-                            : `WooSuite AI is optimizing ${batchStatus.total} items in the background.`}
-                      </div>
-                  </div>
-              </div>
-              <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowProcessModal(true)}
-                    className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition"
-                  >
-                      Show Progress
-                  </button>
-                  <button
-                    onClick={stopBackgroundBatch}
-                    className="bg-red-500/80 hover:bg-red-500 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
-                  >
-                      <Ban size={16} /> Stop
-                  </button>
-              </div>
-          </div>
-      )}
-
-      {/* Force Reset Banner (If stuck or stopped) */}
-      {batchStatus?.status !== 'idle' && batchStatus?.status !== 'running' && batchStatus?.status !== 'paused' && (
-           <div className="bg-gray-100 rounded-lg p-3 flex justify-between items-center text-sm text-gray-600">
-               <span>Process status: <strong>{batchStatus?.status}</strong></span>
-               <div className="flex gap-3">
-                   <button onClick={resumeBatch} className="text-purple-600 hover:underline text-xs font-bold">
-                       Resume Process
-                   </button>
-                   <button onClick={resetBackgroundBatch} className="text-red-600 hover:underline text-xs">
-                       Force Reset Status
-                   </button>
-               </div>
-           </div>
-      )}
-
-      {/* Stuck Detection Banner */}
-      {batchStatus?.status === 'running' && (Date.now() / 1000 - batchStatus.last_updated > 120) && (
-           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex justify-between items-center text-sm text-amber-800 mb-4">
-               <div className="flex items-center gap-2">
-                   <AlertTriangle size={16} />
-                   <span>Process seems stuck (no updates for 2+ mins). WP Cron might be inactive.</span>
-               </div>
-               <button onClick={resumeBatch} className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1 rounded text-xs font-medium transition">
-                   Resume / Kickstart
-               </button>
-           </div>
-      )}
-
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -453,18 +305,12 @@ const SeoManager: React.FC = () => {
                     <Sparkles size={16} /> Optimize Selected ({selectedIds.length})
                 </button>
             ) : (
-                // Background Bulk Trigger
                 <button
-                    onClick={() => setShowStartModal(true)}
-                    disabled={batchStatus?.status === 'running' || batchStatus?.status === 'paused'}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border
-                        ${(batchStatus?.status === 'running' || batchStatus?.status === 'paused')
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
-                            : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                        }`}
+                    onClick={handleOptimizeAll}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm flex items-center gap-2 border bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
                 >
-                    {(batchStatus?.status === 'running' || batchStatus?.status === 'paused') ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
-                    {batchStatus?.status === 'paused' ? 'Resuming...' : 'Optimize All Content'}
+                    <Play size={16} /> Optimize All (Batch 500)
                 </button>
             )}
         </div>
@@ -747,36 +593,6 @@ const SeoManager: React.FC = () => {
         )}
       </div>
 
-      {/* Start Modal */}
-      {showStartModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                  <h3 className="text-xl font-bold mb-4">Start Optimization</h3>
-                  <div className="space-y-4">
-                      <p className="text-gray-600">
-                          This process will optimize all <strong>{totalItems}</strong> <span className="capitalize">{activeTab}s</span> in the background.
-                          <br/>
-                          {activeTab === 'product' && <span className="text-sm text-purple-600 font-medium">✨ Includes automatic optimization of Product Images!</span>}
-                      </p>
-
-                  </div>
-                  <div className="mt-6 flex justify-end gap-3">
-                      <button
-                        onClick={() => setShowStartModal(false)}
-                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={startBackgroundBatch}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2"
-                      >
-                        <Play size={16} /> Start Batch
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
 
       {/* Scan Modal */}
       {showScanModal && (
@@ -916,13 +732,13 @@ const SeoManager: React.FC = () => {
       {isClientBatch && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                   <h3 className="text-xl font-bold mb-4">Optimizing Selected Items...</h3>
+                   <h3 className="text-xl font-bold mb-4">Optimizing Items...</h3>
                    <div className="space-y-4">
                        <div className="flex items-center gap-3">
                             <RefreshCw className="animate-spin text-purple-600" size={24} />
                             <div>
-                                <div className="font-semibold text-gray-900">Processing...</div>
-                                <div className="text-sm text-gray-500">Please do not close this tab.</div>
+                                <div className="font-semibold text-gray-900">Processing Batch</div>
+                                <div className="text-sm text-red-600 font-medium">⚠️ Do not close or refresh this tab.</div>
                             </div>
                        </div>
                        <div>
@@ -953,83 +769,6 @@ const SeoManager: React.FC = () => {
           </div>
       )}
 
-      {/* Progress Modal */}
-      {showProcessModal && batchStatus && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-                   <div className="flex justify-between items-center mb-4">
-                       <h3 className="text-xl font-bold">Background Optimization</h3>
-                       <button onClick={() => setShowProcessModal(false)} className="text-gray-400 hover:text-gray-600">
-                           <X size={20} />
-                       </button>
-                   </div>
-
-                   <div className="space-y-4">
-                       <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-full ${batchStatus.status === 'running' ? 'bg-purple-100 text-purple-600' : batchStatus.status === 'paused' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}>
-                                {batchStatus.status === 'running' ? <RefreshCw className="animate-spin" size={24} /> : batchStatus.status === 'paused' ? <Loader className="animate-spin" size={24} /> : <Check size={24} />}
-                            </div>
-                            <div>
-                                <div className="font-semibold text-gray-900 capitalize">{batchStatus.status}</div>
-                                <div className="text-sm text-gray-500">{batchStatus.message}</div>
-                            </div>
-                       </div>
-
-                       {batchStatus.total > 0 && (
-                           <div>
-                               <div className="flex justify-between text-sm mb-1">
-                                   <span>Progress</span>
-                                   <span>{Math.round((batchStatus.processed / batchStatus.total) * 100)}%</span>
-                               </div>
-                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
-                                   <div
-                                     className="h-full bg-purple-600 transition-all duration-500 ease-out"
-                                     style={{ width: `${((batchStatus.processed - (batchStatus.failed || 0)) / batchStatus.total) * 100}%` }}
-                                   />
-                                   {batchStatus.failed > 0 && (
-                                       <div
-                                         className="h-full bg-red-500 transition-all duration-500 ease-out"
-                                         style={{ width: `${(batchStatus.failed / batchStatus.total) * 100}%` }}
-                                       />
-                                   )}
-                               </div>
-                               <div className="flex justify-between text-xs mt-1 text-gray-500">
-                                    <span>Processed: {batchStatus.processed}</span>
-                                    {batchStatus.failed > 0 && <span className="text-red-600 font-semibold">{batchStatus.failed} Failed</span>}
-                                    <span>Total: {batchStatus.total}</span>
-                               </div>
-                           </div>
-                       )}
-
-                       {batchStatus.status === 'running' && (
-                           <div className="flex justify-center gap-2 mt-4">
-                               <button
-                                    onClick={stopBackgroundBatch}
-                                    className="bg-red-50 text-red-600 hover:bg-red-100 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
-                               >
-                                   <Ban size={14} /> Stop
-                               </button>
-                               <button
-                                    onClick={resetBackgroundBatch}
-                                    className="bg-gray-50 text-gray-600 hover:bg-gray-100 px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 transition"
-                               >
-                                   <Trash2 size={14} /> Force Reset
-                               </button>
-                           </div>
-                       )}
-                   </div>
-
-                   <div className="mt-6 flex justify-end">
-                       <button
-                            onClick={() => setShowProcessModal(false)}
-                            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
-                       >
-                           Close
-                       </button>
-                   </div>
-               </div>
-          </div>
-      )}
 
       {/* Sitemap Modal */}
       {showSitemapModal && (

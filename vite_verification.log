@@ -9,3 +9,6 @@
   ➜  Network: http://192.168.0.2:3000/
 5:19:56 PM [vite] (client) page reload verification/verify_paused.py
 5:19:56 PM [vite] (client) page reload verification/verify_paused.py
+5:16:41 PM [vite] (client) page reload includes/api/class-woosuite-api.php
+5:18:18 PM [vite] (client) hmr update /src/components/SeoManager.tsx, /src/index.css, /src/index.css?direct
+5:30:18 PM [vite] (client) hmr update /src/components/SeoManager.tsx, /src/index.css, /src/index.css?direct

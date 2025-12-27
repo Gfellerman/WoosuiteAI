@@ -233,12 +233,17 @@ class WooSuite_Api {
         $filter = $request->get_param('filter'); // 'unoptimized' or empty
         $category = $request->get_param('category');
         $status = $request->get_param('status'); // 'enhanced', 'not_enhanced'
+        $return_ids_only = $request->get_param('fields') === 'ids';
 
         $args = array(
             'posts_per_page' => $limit,
             'paged' => $page,
             'post_status' => 'publish',
         );
+
+        if ( $return_ids_only ) {
+            $args['fields'] = 'ids';
+        }
 
         if ( $type === 'image' ) {
             $args['post_type'] = 'attachment';
@@ -320,6 +325,10 @@ class WooSuite_Api {
         $posts = $query->posts;
         $total = $query->found_posts;
         $pages = $query->max_num_pages;
+
+        if ( $return_ids_only ) {
+            return new WP_REST_Response( array( 'ids' => $posts, 'total' => $total, 'pages' => $pages ), 200 );
+        }
 
         $data = array();
         foreach ( $posts as $post ) {
