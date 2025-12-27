@@ -20,12 +20,10 @@ WooSuite AI is a comprehensive WordPress plugin combining SEO automation (Groq A
 ## SEO Module Instructions (Groq Engine)
 *   **Engine:** The plugin now uses **Groq** with `meta-llama/llama-4-scout-17b-16e-instruct` (Unified Text & Vision).
 *   **JSON Parsing (CRITICAL):** Llama 4 Scout often wraps JSON responses in Markdown code blocks (e.g., ` ```json ... ``` `) or adds conversational text. The API Client (`WooSuite_Groq`) MUST use robust Regex extraction (not just `json_decode` or simple `str_replace`) to parse responses correctly.
-*   **Batch Process:** The SEO Worker (`includes/class-woosuite-seo-worker.php`) runs in background batches.
-*   **Rate Limiting:** Groq Free Tier has ~30 RPM. The worker MUST implementation **Smart Throttling** (`sleep(2)`) between requests.
-*   **Failure Handling:**
-    *   **Rate Limits (429):** Must pause the batch, NOT mark items as failed.
-    *   **Errors:** Genuine errors mark items with `_woosuite_seo_failed` and log the message to `_woosuite_seo_last_error`.
-    *   **Stuck Items:** The worker must cleanup items stuck in 'processing' state (older than 10 mins) to prevent indefinite hangs.
+*   **Batch Architecture (CRITICAL):**
+    *   **Client-Side First:** All bulk operations triggered by the user (e.g., "Optimize All") **MUST** be orchestrated by the Browser (Client-Side Loop) for reliability.
+    *   **WP Cron Avoidance:** Do not rely on `WooSuite_Seo_Worker` (PHP background process) for immediate UI tasks, as WP Cron is unreliable in many environments.
+    *   **Rate Limiting:** The client-side loop must implement "Smart Throttling" (sleep 2s between items) and catch HTTP 429 errors (pause 65s and retry).
 *   **Image SEO:**
     *   The prompt must STRICTLY ignore filenames if they appear random/alphanumeric.
     *   **Size Limit:** Images > 4MB must be skipped (return error) to prevent PHP memory exhaustion or API timeouts.

@@ -47,16 +47,17 @@
 - [x] **Fix**: Relaxed SEO Badge logic (50 chars min) to correctly reflect AI-generated content status.
 - [x] **Fix**: Removed "Simplify Product Names" checkbox from Optimize All modal.
 - [x] **Model Update**: Switched model to `meta-llama/llama-4-scout-17b-16e-instruct` for unified Text & Vision support.
-
-## In Progress / Debugging
 - [x] **SEO Data Persistence**: Implemented robust **JSON Extraction** and **Syntax Cleanup** (trailing commas) to handle Llama 4 Markdown output.
 - [x] **Build Fix**: Added `browserslist` to `package.json` to fix critical submission error.
 - [x] **Stability**: Improved `WooSuite_Groq` error logging to capture exact raw response when JSON parsing fails.
+- [x] **Verification**: Waiting for user confirmation that Batch SEO is now stable and saving correctly.
+- [x] **Batch Strategy Pivot**: Abandoned Server-Side background worker for "Optimize All". Now uses **Client-Side Batch Loop** (Browser Tab must stay open) for 100% reliability.
+- [x] **UI/UX**: Implemented "Optimize All (Batch 500)" button with ID-only fetching and progress modal.
 
 ## In Progress / Debugging
-- [ ] **Verification**: Waiting for user confirmation that Batch SEO is now stable and saving correctly.
+- [ ] **Cleanup**: Remove legacy `WooSuite_Seo_Worker` code if Client-Side proves fully sufficient over long term (Keep for now as reference).
 
 ## Architecture Notes
 - **AI Engine**: Groq (Llama 4 Scout 17B - Unified Model).
-- **Throttling**: Worker sleeps 2s between requests.
-- **State**: Batch process uses `_woosuite_seo_processed_at` to track progress.
+- **Batch Processing**: **Client-Side (Browser)** is the primary method. Server-Side worker is deprecated for UI operations due to WP Cron unreliability.
+- **Throttling**: Client sleeps 2s between requests, and 65s on 429 Rate Limit.
