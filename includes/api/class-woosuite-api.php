@@ -268,6 +268,14 @@ class WooSuite_Api {
         $params = $request->get_json_params();
         $provided_key = isset( $params['apiKey'] ) ? sanitize_text_field( $params['apiKey'] ) : null;
 
+        // DEBUG: Log the key check to system logs to diagnose issues
+        $debug_logs = get_option('woosuite_debug_log', array());
+        $timestamp = date('Y-m-d H:i:s');
+        $key_status = empty($provided_key) ? 'Missing/Empty' : 'Present (Length: ' . strlen($provided_key) . ')';
+        $debug_entry = "[$timestamp] [DEBUG] Test Connection. Key provided in request: $key_status";
+        array_unshift($debug_logs, $debug_entry);
+        update_option('woosuite_debug_log', array_slice($debug_logs, 0, 50));
+
         $groq = new WooSuite_Groq( $provided_key );
         $result = $groq->test_connection();
 
@@ -280,9 +288,16 @@ class WooSuite_Api {
             ), 500 );
         }
 
+        // Handle warning from fallback model usage
+        $warning = isset($result['warning']) ? $result['warning'] : null;
+        $message = 'Connection Successful!';
+        if ($warning) {
+            $message .= ' ' . $warning;
+        }
+
         return new WP_REST_Response( array(
             'success' => true,
-            'message' => 'Connection Successful!',
+            'message' => $message,
             'data' => $result
         ), 200 );
     }
