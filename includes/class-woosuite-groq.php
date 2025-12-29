@@ -6,7 +6,8 @@ class WooSuite_Groq {
     private $api_url = 'https://api.groq.com/openai/v1/chat/completions';
 
     // Model Constants
-    const MODEL_MAIN = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const MODEL_MAIN = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Preferred
+    const MODEL_FALLBACK = 'llama-3.1-8b-instant'; // Safe fallback for connection testing
     const MODEL_GUARD = 'meta-llama/llama-guard-4-12b';
     const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Only vision model available currently
 
@@ -26,6 +27,7 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
+        // 1. Try Main Model
         $body = array(
             'model' => self::MODEL_MAIN,
             'messages' => array(
@@ -37,7 +39,33 @@ class WooSuite_Groq {
             'max_tokens' => 10
         );
 
-        return $this->call_api( $body, false ); // False = No JSON enforcement for test
+        $result = $this->call_api( $body, false );
+
+        if ( ! is_wp_error( $result ) ) {
+            return $result; // Success with main model
+        }
+
+        // 2. If Main Model fails (e.g. 404 Model Not Found), try Fallback Model
+        // This ensures we can tell the user "Key is Valid" even if the specific model ID is wrong/restricted.
+        $error_code = $result->get_error_code();
+        $error_msg = $result->get_error_message();
+
+        // Groq returns 404 for invalid model, 401 for invalid key.
+        if ( strpos( $error_msg, '404' ) !== false || strpos( $error_msg, 'model_not_found' ) !== false ) {
+             $body['model'] = self::MODEL_FALLBACK;
+             $fallback_result = $this->call_api( $body, false );
+
+             if ( ! is_wp_error( $fallback_result ) ) {
+                 // Return success but with a warning data
+                 return array(
+                     'status' => 200,
+                     'content' => 'Connection Successful (Fallback Model Used)',
+                     'warning' => "The primary model (" . self::MODEL_MAIN . ") was not found or is restricted. Using " . self::MODEL_FALLBACK . " instead."
+                 );
+             }
+        }
+
+        return $result;
     }
 
     public function generate_seo_meta( $item ) {
