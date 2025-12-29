@@ -4,6 +4,7 @@ class WooSuite_Groq {
 
     private $api_key;
     private $api_url = 'https://api.groq.com/openai/v1/chat/completions';
+    private $model_id;
 
     // Model Constants
     const MODEL_MAIN = 'meta-llama/llama-3.3-70b-versatile'; // Stable, high performance
@@ -19,6 +20,29 @@ class WooSuite_Groq {
             // We reuse the existing option key to preserve user input
             $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
         }
+
+        // Handle Custom API / BYO-LLM
+        $use_custom = get_option( 'woosuite_use_custom_api', 'no' ) === 'yes';
+        if ( $use_custom ) {
+            $custom_url = get_option( 'woosuite_api_url_custom', '' );
+            if ( ! empty( $custom_url ) ) {
+                $this->api_url = rtrim( $custom_url, '/' );
+                // If user didn't append /chat/completions, we might need to?
+                // Standard OpenAI compatible endpoints usually end in v1/chat/completions
+                // But user might paste the full URL. Let's assume full URL for flexibility,
+                // or appending if it looks like a base URL.
+                // For now, trust the user pasted the full endpoint or we stick to standard if it's just a base.
+            }
+
+            $custom_model = get_option( 'woosuite_api_model_custom', '' );
+            if ( ! empty( $custom_model ) ) {
+                $this->model_id = $custom_model;
+            }
+        }
+    }
+
+    private function get_model( $default_model ) {
+        return ! empty( $this->model_id ) ? $this->model_id : $default_model;
     }
 
     public function test_connection() {
@@ -29,7 +53,7 @@ class WooSuite_Groq {
         // Use the most basic/stable model for connection testing
         // This avoids issues where a key might be valid but not have access to preview models
         $body = array(
-            'model' => self::MODEL_TEST,
+            'model' => $this->get_model( self::MODEL_TEST ),
             'messages' => array(
                 array(
                     'role' => 'user',
@@ -90,7 +114,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => self::MODEL_MAIN,
+            'model' => $this->get_model( self::MODEL_MAIN ),
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -108,7 +132,10 @@ class WooSuite_Groq {
     }
 
     public function analyze_security_logs( $logs_summary ) {
-        if ( empty( $this->api_key ) ) {
+        // If Custom API is used, we might not need an API key (e.g. Ollama local)
+        // But for Groq it is required.
+        // We relax the check if custom URL is set.
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
@@ -133,7 +160,8 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => self::MODEL_MAIN,
+            'model' => $this->get_model( self::MODEL_MAIN ),
+            'model' => $this->get_model( self::MODEL_MAIN ),
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -198,7 +226,7 @@ class WooSuite_Groq {
     }
 
     public function analyze_security_threat( $code_snippet, $filename ) {
-        if ( empty( $this->api_key ) ) {
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
@@ -223,7 +251,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => self::MODEL_MAIN,
+            'model' => $this->get_model( self::MODEL_MAIN ),
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -241,7 +269,7 @@ class WooSuite_Groq {
     }
 
     public function generate_image_seo( $url, $filename, $product_context = null ) {
-        if ( empty( $this->api_key ) ) {
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
@@ -285,7 +313,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => self::MODEL_VISION,
+            'model' => $this->get_model( self::MODEL_VISION ),
             'messages' => array(
                 array(
                     'role' => 'user',

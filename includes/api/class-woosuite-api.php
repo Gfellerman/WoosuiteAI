@@ -248,6 +248,18 @@ class WooSuite_Api {
         if ( isset( $params['loginMaxRetries'] ) ) {
             update_option( 'woosuite_login_max_retries', (int) $params['loginMaxRetries'] );
         }
+
+        // Custom API / BYO-LLM Settings
+        if ( isset( $params['useCustomApi'] ) ) {
+            update_option( 'woosuite_use_custom_api', $params['useCustomApi'] ? 'yes' : 'no' );
+        }
+        if ( isset( $params['customApiUrl'] ) ) {
+            update_option( 'woosuite_api_url_custom', esc_url_raw( $params['customApiUrl'] ) );
+        }
+        if ( isset( $params['customModelId'] ) ) {
+            update_option( 'woosuite_api_model_custom', sanitize_text_field( $params['customModelId'] ) );
+        }
+
         return new WP_REST_Response( array( 'success' => true ), 200 );
     }
 
@@ -261,7 +273,12 @@ class WooSuite_Api {
 
     public function get_settings( $request ) {
         $api_key = get_option( 'woosuite_gemini_api_key', '' );
-        return new WP_REST_Response( array( 'apiKey' => $api_key ), 200 );
+        return new WP_REST_Response( array(
+            'apiKey' => $api_key,
+            'useCustomApi' => get_option( 'woosuite_use_custom_api', 'no' ) === 'yes',
+            'customApiUrl' => get_option( 'woosuite_api_url_custom', '' ),
+            'customModelId' => get_option( 'woosuite_api_model_custom', '' )
+        ), 200 );
     }
 
     public function test_api_connection( $request ) {
