@@ -95,6 +95,49 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function analyze_security_logs( $logs_summary ) {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $prompt = "
+            You are a WordPress Security Analyst. Analyze these recent security events and provide actionable insights.
+
+            Security Events Summary:
+            \"$logs_summary\"
+
+            Task:
+            1. Identify if there is an active attack (e.g., Brute Force, SQLi campaign).
+            2. Assess the overall threat level (Low, Medium, Critical).
+            3. Recommend 2-3 specific actions the user should take.
+
+            Output strictly JSON:
+            {
+                \"verdict\": \"Safe\" | \"Under Attack\" | \"Suspicious Activity\",
+                \"threatLevel\": \"Low\" | \"Medium\" | \"Critical\",
+                \"summary\": \"Concise summary of what is happening (max 50 words).\",
+                \"actions\": [\"Action 1\", \"Action 2\"]
+            }
+        ";
+
+        $body = array(
+            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a cybersecurity expert. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function rewrite_content( $text, $type, $tone, $instructions = '', $context = '' ) {
         if ( empty( $this->api_key ) ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
