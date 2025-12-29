@@ -265,7 +265,10 @@ class WooSuite_Api {
     }
 
     public function test_api_connection( $request ) {
-        $groq = new WooSuite_Groq();
+        $params = $request->get_json_params();
+        $provided_key = isset( $params['apiKey'] ) ? sanitize_text_field( $params['apiKey'] ) : null;
+
+        $groq = new WooSuite_Groq( $provided_key );
         $result = $groq->test_connection();
 
         if ( is_wp_error( $result ) ) {
