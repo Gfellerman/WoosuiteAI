@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SecurityLog } from '../types';
-import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle, Scan, X, Trash2, Archive, CheckCircle, RotateCcw } from 'lucide-react';
+import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle, Scan, X, Trash2, Archive, CheckCircle, RotateCcw, Sparkles } from 'lucide-react';
 
 const SecurityHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'quarantine'>('dashboard');
@@ -28,6 +28,8 @@ const SecurityHub: React.FC = () => {
   // Quarantine & Ignore Lists
   const [quarantinedFiles, setQuarantinedFiles] = useState<any[]>([]);
   const [ignoredPaths, setIgnoredPaths] = useState<string[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [analyzingFile, setAnalyzingFile] = useState<string | null>(null);
 
   const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
@@ -286,6 +288,29 @@ const SecurityHub: React.FC = () => {
       setDeepScanStatus({ ...deepScanStatus, status: 'idle' });
   };
 
+  const handleAiAnalyze = async (filepath: string) => {
+    setAnalyzingFile(filepath);
+    setAiAnalysis(null);
+    try {
+        const res = await fetch(`${apiUrl}/security/analyze-file`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify({ file: filepath })
+        });
+        const data = await res.json();
+        if (data.success && data.analysis) {
+            setAiAnalysis({ file: filepath, ...data.analysis });
+        } else {
+            alert('AI Analysis failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Analysis request failed.');
+    } finally {
+        setAnalyzingFile(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
        <div className="flex justify-between items-center">
@@ -323,6 +348,45 @@ const SecurityHub: React.FC = () => {
 
       {activeTab === 'dashboard' && (
       <>
+        {/* AI Analysis Modal */}
+        {aiAnalysis && (
+             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+                <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl">
+                     <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                             <Sparkles className="text-purple-600" /> AI Security Analysis
+                        </h3>
+                        <button onClick={() => setAiAnalysis(null)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                     </div>
+
+                     <div className="mb-4">
+                         <p className="text-xs text-gray-500 font-mono mb-2 break-all">{aiAnalysis.file}</p>
+                         <div className={`p-4 rounded-lg border-l-4 ${
+                             aiAnalysis.verdict?.toLowerCase().includes('safe') ? 'bg-green-50 border-green-500 text-green-800' :
+                             aiAnalysis.verdict?.toLowerCase().includes('malicious') ? 'bg-red-50 border-red-500 text-red-800' :
+                             'bg-amber-50 border-amber-500 text-amber-800'
+                         }`}>
+                             <div className="flex justify-between items-center mb-1">
+                                 <span className="font-bold text-lg">{aiAnalysis.verdict}</span>
+                                 <span className="text-xs uppercase tracking-wide opacity-75">Confidence: {aiAnalysis.confidence}</span>
+                             </div>
+                             <p className="text-sm">{aiAnalysis.explanation}</p>
+                         </div>
+                     </div>
+
+                     <div className="flex justify-end gap-3">
+                        <button onClick={() => setAiAnalysis(null)} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium">Close</button>
+                        {aiAnalysis.verdict?.toLowerCase().includes('safe') && (
+                            <button onClick={() => { handleIgnore(aiAnalysis.file); setAiAnalysis(null); }} className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium">Mark as Safe (Ignore)</button>
+                        )}
+                        {aiAnalysis.verdict?.toLowerCase().includes('malicious') && (
+                            <button onClick={() => { handleQuarantine(aiAnalysis.file); setAiAnalysis(null); }} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium">Quarantine File</button>
+                        )}
+                     </div>
+                </div>
+             </div>
+        )}
+
         {/* Deep Scan Modal */}
         {showDeepScanModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
@@ -393,6 +457,18 @@ const SecurityHub: React.FC = () => {
                                             <td className="p-3 font-mono text-xs text-gray-700 break-all">{res.file}</td>
                                             <td className="p-3 text-red-700 text-xs font-bold whitespace-nowrap">{res.issue}</td>
                                             <td className="p-3 flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleAiAnalyze(res.file)}
+                                                    className="px-2 py-1 bg-purple-50 border border-purple-200 text-purple-700 rounded text-xs hover:bg-purple-100 flex items-center gap-1 font-medium"
+                                                    disabled={analyzingFile === res.file}
+                                                >
+                                                    {analyzingFile === res.file ? (
+                                                        <span className="animate-spin">⌛</span>
+                                                    ) : (
+                                                        <Sparkles size={12}/>
+                                                    )}
+                                                    Analyze
+                                                </button>
                                                 <button
                                                     onClick={() => handleIgnore(res.file)}
                                                     className="px-2 py-1 bg-white border border-gray-300 rounded text-xs text-gray-600 hover:bg-gray-50 flex items-center gap-1"
