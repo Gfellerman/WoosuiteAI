@@ -142,6 +142,49 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function analyze_security_threat( $code_snippet, $filename ) {
+        if ( empty( $this->api_key ) ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        // Truncate snippet if too long (just to be safe, though API limits it too)
+        $snippet = substr( $code_snippet, 0, 4000 );
+
+        $prompt = "
+            You are a WordPress Security Analyst. Analyze this code snippet found in a file named '$filename'.
+
+            Code Snippet:
+            \"$snippet\"
+
+            Task: Determine if this code is Malicious, Suspicious, or Safe.
+            Context: It was flagged by a regex scanner (e.g. for 'eval' or 'base64_decode').
+
+            Output strictly JSON:
+            {
+                \"verdict\": \"Safe\" | \"Suspicious\" | \"Malicious\",
+                \"confidence\": \"High\" | \"Medium\" | \"Low\",
+                \"explanation\": \"Concise explanation (max 50 words) suitable for a non-technical user.\"
+            }
+        ";
+
+        $body = array(
+            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a cybersecurity expert. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function generate_image_seo( $url, $filename, $product_context = null ) {
         if ( empty( $this->api_key ) ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );

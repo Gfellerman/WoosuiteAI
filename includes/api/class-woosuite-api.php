@@ -98,6 +98,58 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        // Quarantine Routes
+        register_rest_route( $this->namespace, '/security/quarantine', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_quarantined_files' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/quarantine/move', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'move_to_quarantine' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/quarantine/restore', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'restore_from_quarantine' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/quarantine/delete', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'delete_from_quarantine' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        // Ignore Routes
+        register_rest_route( $this->namespace, '/security/ignore', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_ignored_paths' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/ignore', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'add_ignored_path' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/security/ignore/remove', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'remove_ignored_path' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        // AI Security Analysis
+        register_rest_route( $this->namespace, '/security/analyze-file', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'analyze_security_file' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
             'methods' => 'POST',
@@ -838,6 +890,127 @@ class WooSuite_Api {
         $results = get_option( 'woosuite_security_scan_results', array() );
         $status['results'] = $results;
         return new WP_REST_Response( $status, 200 );
+    }
+
+    // --- Quarantine & Ignore Callbacks ---
+
+    public function get_quarantined_files( $request ) {
+        $quarantine = new WooSuite_Security_Quarantine();
+        return new WP_REST_Response( array( 'files' => $quarantine->get_quarantined_files() ), 200 );
+    }
+
+    public function move_to_quarantine( $request ) {
+        $params = $request->get_json_params();
+        $file = isset( $params['file'] ) ? $params['file'] : '';
+        if ( empty( $file ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No file specified' ), 400 );
+
+        $quarantine = new WooSuite_Security_Quarantine();
+        $result = $quarantine->quarantine_file( $file );
+
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function restore_from_quarantine( $request ) {
+        $params = $request->get_json_params();
+        $id = isset( $params['id'] ) ? $params['id'] : '';
+        if ( empty( $id ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No ID specified' ), 400 );
+
+        $quarantine = new WooSuite_Security_Quarantine();
+        $result = $quarantine->restore_file( $id );
+
+        if ( is_wp_error( $result ) ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function delete_from_quarantine( $request ) {
+        $params = $request->get_json_params();
+        $id = isset( $params['id'] ) ? $params['id'] : '';
+        if ( empty( $id ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No ID specified' ), 400 );
+
+        $quarantine = new WooSuite_Security_Quarantine();
+        $result = $quarantine->delete_file( $id );
+
+        if ( is_wp_error( $result ) ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function get_ignored_paths( $request ) {
+        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
+        return new WP_REST_Response( array( 'ignored' => $ignored ), 200 );
+    }
+
+    public function add_ignored_path( $request ) {
+        $params = $request->get_json_params();
+        $path = isset( $params['path'] ) ? $params['path'] : '';
+        if ( empty( $path ) ) return new WP_REST_Response( array( 'success' => false ), 400 );
+
+        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
+        if ( ! in_array( $path, $ignored ) ) {
+            $ignored[] = $path;
+            update_option( 'woosuite_security_ignored_paths', $ignored );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function remove_ignored_path( $request ) {
+        $params = $request->get_json_params();
+        $path = isset( $params['path'] ) ? $params['path'] : '';
+        if ( empty( $path ) ) return new WP_REST_Response( array( 'success' => false ), 400 );
+
+        $ignored = get_option( 'woosuite_security_ignored_paths', array() );
+        $index = array_search( $path, $ignored );
+        if ( $index !== false ) {
+            unset( $ignored[$index] );
+            update_option( 'woosuite_security_ignored_paths', array_values( $ignored ) );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function analyze_security_file( $request ) {
+        $params = $request->get_json_params();
+        $filepath = isset( $params['file'] ) ? sanitize_text_field( $params['file'] ) : '';
+
+        if ( empty( $filepath ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'No file specified.' ), 400 );
+        }
+
+        // Convert relative path to absolute
+        if ( strpos( $filepath, ABSPATH ) === false ) {
+            $real_filepath = ABSPATH . $filepath;
+        } else {
+            $real_filepath = $filepath;
+        }
+
+        if ( ! file_exists( $real_filepath ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'File not found.' ), 404 );
+        }
+
+        // Limit file reading to prevent memory issues (Read first 5KB)
+        $content = file_get_contents( $real_filepath, false, null, 0, 5120 );
+        if ( $content === false ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Could not read file.' ), 500 );
+        }
+
+        $groq = new WooSuite_Groq();
+        $analysis = $groq->analyze_security_threat( $content, basename( $real_filepath ) );
+
+        if ( is_wp_error( $analysis ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'analysis' => $analysis ), 200 );
     }
 
     // --- SEO Batch ---
