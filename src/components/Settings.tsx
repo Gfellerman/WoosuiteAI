@@ -118,8 +118,10 @@ const Settings: React.FC = () => {
           const res = await fetch(`${window.woosuiteData.apiUrl}/settings/test-connection`, {
               method: 'POST',
               headers: {
+                  'Content-Type': 'application/json',
                   'X-WP-Nonce': window.woosuiteData.nonce
-              }
+              },
+              body: JSON.stringify({ apiKey: apiKey.trim() })
           });
 
           const data = await res.json();

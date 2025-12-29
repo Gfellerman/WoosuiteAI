@@ -10,10 +10,15 @@ class WooSuite_Groq {
     const MODEL_GUARD = 'meta-llama/llama-guard-4-12b';
     const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Only vision model available currently
 
-    public function __construct() {
-        // We reuse the existing option key to preserve user input
-        // if they already pasted the Groq key into the 'Gemini' field.
-        $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
+    public function __construct( $api_key = null ) {
+        // Allow passing key explicitly for testing connection before saving
+        if ( ! empty( $api_key ) ) {
+            $this->api_key = $api_key;
+        } else {
+            // We reuse the existing option key to preserve user input
+            // if they already pasted the Groq key into the 'Gemini' field.
+            $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
+        }
     }
 
     public function test_connection() {
