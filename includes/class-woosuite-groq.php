@@ -6,10 +6,10 @@ class WooSuite_Groq {
     private $api_url = 'https://api.groq.com/openai/v1/chat/completions';
 
     // Model Constants
-    const MODEL_MAIN = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Preferred
-    const MODEL_FALLBACK = 'llama-3.1-8b-instant'; // Safe fallback for connection testing
-    const MODEL_GUARD = 'meta-llama/llama-guard-4-12b';
-    const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Only vision model available currently
+    const MODEL_MAIN = 'meta-llama/llama-3.3-70b-versatile'; // Stable, high performance
+    const MODEL_TEST = 'llama-3.1-8b-instant'; // Fast, for connection testing
+    const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Vision
+    const MODEL_GUARD = 'meta-llama/llama-guard-3-8b';
 
     public function __construct( $api_key = null ) {
         // Allow passing key explicitly for testing connection before saving
@@ -17,55 +17,29 @@ class WooSuite_Groq {
             $this->api_key = $api_key;
         } else {
             // We reuse the existing option key to preserve user input
-            // if they already pasted the Groq key into the 'Gemini' field.
             $this->api_key = get_option( 'woosuite_gemini_api_key', '' );
         }
     }
 
     public function test_connection() {
         if ( empty( $this->api_key ) ) {
-            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+            return new WP_Error( 'missing_key', 'Groq API Key is missing or empty.' );
         }
 
-        // 1. Try Main Model
+        // Use the most basic/stable model for connection testing
+        // This avoids issues where a key might be valid but not have access to preview models
         $body = array(
-            'model' => self::MODEL_MAIN,
+            'model' => self::MODEL_TEST,
             'messages' => array(
                 array(
                     'role' => 'user',
-                    'content' => "Say 'Hello' if you can hear me."
+                    'content' => "Ping"
                 )
             ),
-            'max_tokens' => 10
+            'max_tokens' => 5
         );
 
-        $result = $this->call_api( $body, false );
-
-        if ( ! is_wp_error( $result ) ) {
-            return $result; // Success with main model
-        }
-
-        // 2. If Main Model fails (e.g. 404 Model Not Found), try Fallback Model
-        // This ensures we can tell the user "Key is Valid" even if the specific model ID is wrong/restricted.
-        $error_code = $result->get_error_code();
-        $error_msg = $result->get_error_message();
-
-        // Groq returns 404 for invalid model, 401 for invalid key.
-        if ( strpos( $error_msg, '404' ) !== false || strpos( $error_msg, 'model_not_found' ) !== false ) {
-             $body['model'] = self::MODEL_FALLBACK;
-             $fallback_result = $this->call_api( $body, false );
-
-             if ( ! is_wp_error( $fallback_result ) ) {
-                 // Return success but with a warning data
-                 return array(
-                     'status' => 200,
-                     'content' => 'Connection Successful (Fallback Model Used)',
-                     'warning' => "The primary model (" . self::MODEL_MAIN . ") was not found or is restricted. Using " . self::MODEL_FALLBACK . " instead."
-                 );
-             }
-        }
-
-        return $result;
+        return $this->call_api( $body, false );
     }
 
     public function generate_seo_meta( $item ) {
@@ -228,7 +202,7 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
-        // Truncate snippet if too long (just to be safe, though API limits it too)
+        // Truncate snippet if too long
         $snippet = substr( $code_snippet, 0, 4000 );
 
         $prompt = "
@@ -248,8 +222,6 @@ class WooSuite_Groq {
             }
         ";
 
-        // Use MAIN model (Scout 17b) as it is better at reasoning than Guard for explanation.
-        // Guard is for safety classification (Input/Output), not malware analysis per se.
         $body = array(
             'model' => self::MODEL_MAIN,
             'messages' => array(
@@ -273,8 +245,7 @@ class WooSuite_Groq {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
-        // 1. Check Image Size (Prevent Memory Exhaustion)
-        // Limit to 4MB (Groq Vision Limit & PHP Memory Safety)
+        // 1. Check Image Size
         $head = wp_remote_head( $url, array( 'timeout' => 5, 'sslverify' => false ) );
         if ( ! is_wp_error( $head ) ) {
              $size = wp_remote_retrieve_header( $head, 'content-length' );
@@ -283,7 +254,7 @@ class WooSuite_Groq {
              }
         }
 
-        // 2. Fetch image (Server Side) to convert to base64
+        // 2. Fetch image
         $image_response = wp_remote_get( $url, array( 'timeout' => 20, 'sslverify' => false ) );
         if ( is_wp_error( $image_response ) || wp_remote_retrieve_response_code( $image_response ) !== 200 ) {
             return new WP_Error( 'image_fetch_error', 'Could not fetch image from server: ' . $url );
@@ -313,7 +284,6 @@ class WooSuite_Groq {
             Return strictly JSON: { \"altText\": \"...\", \"title\": \"...\" }
         ";
 
-        // Use Llama 3.2 Vision (11b) for image analysis (only one supporting images currently)
         $body = array(
             'model' => self::MODEL_VISION,
             'messages' => array(
@@ -361,6 +331,7 @@ class WooSuite_Groq {
         }
 
         if ( $code !== 200 ) {
+            // Log generic errors
             error_log('WooSuite Groq Error: ' . $raw_body);
             return new WP_Error( 'api_error', 'Groq API Error: ' . $code . ' - ' . $raw_body );
         }
@@ -374,24 +345,18 @@ class WooSuite_Groq {
         $content = $data['choices'][0]['message']['content'];
 
         if ( $json_mode ) {
-            // Updated Robust JSON Extraction for Llama 4
             $extracted_json = $this->extract_json_from_text( $content );
-
-            // Attempt basic decode
             $json = json_decode( $extracted_json, true );
 
-            // If basic decode fails, try to clean up common LLM JSON errors (like trailing commas)
             if ( json_last_error() !== JSON_ERROR_NONE ) {
                 $cleaned_json = $this->cleanup_json_syntax( $extracted_json );
                 $json = json_decode( $cleaned_json, true );
             }
 
             if ( json_last_error() !== JSON_ERROR_NONE ) {
-                 // Debug log for failed extractions
                  error_log( 'WooSuite JSON Fail. Error: ' . json_last_error_msg() );
                  error_log( 'Original: ' . $content );
-                 error_log( 'Extracted: ' . $extracted_json );
-                 return new WP_Error( 'json_error', 'Invalid JSON from Groq. See System Logs for details.' );
+                 return new WP_Error( 'json_error', 'Invalid JSON from Groq.' );
             }
             return $json;
         }
@@ -399,49 +364,28 @@ class WooSuite_Groq {
         return array( 'status' => $code, 'raw_response' => $data, 'content' => $content );
     }
 
-    /**
-     * Extracts strictly the JSON part from a text response.
-     * Handles Markdown code blocks and conversational text.
-     */
     private function extract_json_from_text( $text ) {
-        // 1. Try to find JSON block inside Markdown code block (```json ... ``` or ``` ... ```)
-        // using 's' modifier for multiline support (DOTALL)
         if ( preg_match( '/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches ) ) {
             return $matches[1];
         }
 
-        // 2. Brute-force JSON finder (Recursive-ish loop)
-        // This handles cases where there is a preamble with braces before the actual JSON object.
-        // e.g., "I used the context {foo} to generate: { "title": ... }"
-
         $offset = 0;
-        $max_attempts = 5; // Prevent infinite loops on massive text
+        $max_attempts = 5;
         $attempt = 0;
 
         while ( ($start = strpos( $text, '{', $offset )) !== false && $attempt < $max_attempts ) {
-            $end = strrpos( $text, '}' ); // Look for the last brace in the WHOLE string
-
+            $end = strrpos( $text, '}' );
             if ( $end !== false && $end > $start ) {
                 $candidate = substr( $text, $start, $end - $start + 1 );
-
-                // Fast Validation Check before full decode (Optimization)
-                // We expect specific keys based on the task, but let's just trust json_decode for now.
-                // Or better, check if the candidate *looks* like our expected schema?
-                // No, generic JSON validation is safer.
-
-                // Attempt decode
                 json_decode( $candidate );
                 if ( json_last_error() === JSON_ERROR_NONE ) {
                     return $candidate;
                 }
             }
-
-            // If failed, try finding the next opening brace
             $offset = $start + 1;
             $attempt++;
         }
 
-        // 3. Fallback: Return original if nothing found (or if simple case)
         $start = strpos( $text, '{' );
         $end = strrpos( $text, '}' );
         if ( $start !== false && $end !== false && $end > $start ) {
@@ -451,18 +395,8 @@ class WooSuite_Groq {
         return $text;
     }
 
-    /**
-     * Cleans common JSON syntax errors from LLM output
-     */
     private function cleanup_json_syntax( $json ) {
-        // Remove trailing commas before closing braces/brackets
-        // Regex: , (whitespace) }  ->  }
         $json = preg_replace( '/,\s*([\}\]])/', '$1', $json );
-
-        // Ensure keys are quoted (if missing) - Simple case
-        // $json = preg_replace( '/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/', '$1"$2"$3', $json );
-        // (Commented out as it's risky with content containing colons, but trailing commas are the main culprit)
-
         return $json;
     }
 }
