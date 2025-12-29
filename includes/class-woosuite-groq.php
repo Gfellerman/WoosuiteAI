@@ -17,7 +17,7 @@ class WooSuite_Groq {
         }
 
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'user',
@@ -78,7 +78,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -121,7 +121,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -168,7 +168,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -211,7 +211,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.3-70b-versatile',
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -273,9 +273,10 @@ class WooSuite_Groq {
             Return strictly JSON: { \"altText\": \"...\", \"title\": \"...\" }
         ";
 
-        // Use Llama 4 Scout (Multimodal) as Llama 3.2 Vision is deprecated
+        // Use Llama 3.2 Vision (11b) for image analysis (only one supporting images currently)
+        // Note: Llama 3.3 70b is text only.
         $body = array(
-            'model' => 'meta-llama/llama-4-scout-17b-16e-instruct',
+            'model' => 'llama-3.2-11b-vision-preview',
             'messages' => array(
                 array(
                     'role' => 'user',
