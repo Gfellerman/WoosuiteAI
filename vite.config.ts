@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
     // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
     const env = loadEnv(mode, '.', '');
     return {
+      // Base path for assets. './' allows loading relative to the HTML file (good for file:// and subfolder deployments)
+      base: './',
       server: {
         port: 3000,
         host: '0.0.0.0',
