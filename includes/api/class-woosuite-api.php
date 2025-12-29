@@ -149,6 +149,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/security/analyze-logs', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'analyze_security_logs' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
 
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
@@ -1005,6 +1011,45 @@ class WooSuite_Api {
 
         $groq = new WooSuite_Groq();
         $analysis = $groq->analyze_security_threat( $content, basename( $real_filepath ) );
+
+        if ( is_wp_error( $analysis ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'analysis' => $analysis ), 200 );
+    }
+
+    public function analyze_security_logs( $request ) {
+        // Fetch recent security logs
+        $security = new WooSuite_Security( $this->plugin_name, $this->version );
+        $logs = $security->get_logs( 50 ); // Get last 50 events
+
+        if ( empty( $logs ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'No security logs found to analyze.' ), 400 );
+        }
+
+        // Summarize logs for AI context
+        $summary = "";
+        $counts = array();
+        foreach ( $logs as $log ) {
+            $event = $log->event;
+            if ( ! isset( $counts[$event] ) ) $counts[$event] = 0;
+            $counts[$event]++;
+        }
+
+        $summary .= "Event Counts:\n";
+        foreach ( $counts as $event => $count ) {
+            $summary .= "- $event: $count occurrences\n";
+        }
+
+        $summary .= "\nRecent Entries:\n";
+        $recent = array_slice( $logs, 0, 10 );
+        foreach ( $recent as $l ) {
+            $summary .= "[{$l->created_at}] IP: {$l->ip_address} - {$l->event} (Severity: {$l->severity})\n";
+        }
+
+        $groq = new WooSuite_Groq();
+        $analysis = $groq->analyze_security_logs( $summary );
 
         if ( is_wp_error( $analysis ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );

@@ -31,6 +31,11 @@ const SecurityHub: React.FC = () => {
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [analyzingFile, setAnalyzingFile] = useState<string | null>(null);
 
+  // Log Advisor State
+  const [showLogAdvisor, setShowLogAdvisor] = useState(false);
+  const [logAnalysis, setLogAnalysis] = useState<any>(null);
+  const [analyzingLogs, setAnalyzingLogs] = useState(false);
+
   const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
   useEffect(() => {
@@ -311,6 +316,28 @@ const SecurityHub: React.FC = () => {
     }
   };
 
+  const handleAnalyzeLogs = async () => {
+    setAnalyzingLogs(true);
+    setLogAnalysis(null);
+    try {
+        const res = await fetch(`${apiUrl}/security/analyze-logs`, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        const data = await res.json();
+        if (data.success && data.analysis) {
+            setLogAnalysis(data.analysis);
+        } else {
+            alert('Log Analysis failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Analysis request failed.');
+    } finally {
+        setAnalyzingLogs(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
        <div className="flex justify-between items-center">
@@ -319,6 +346,16 @@ const SecurityHub: React.FC = () => {
             <p className="text-gray-500">Real-time threat monitoring, malware scanning, and spam protection.</p>
         </div>
         <div className="flex gap-2">
+            {/* Log Advisor Button */}
+            {activeTab === 'dashboard' && (
+                <button
+                    onClick={() => setShowLogAdvisor(true)}
+                    className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition flex items-center gap-2 shadow-sm mr-2"
+                >
+                    <Sparkles size={18} /> AI Log Advisor
+                </button>
+            )}
+
             <div className="bg-gray-100 p-1 rounded-lg flex text-sm font-medium">
                 <button
                     onClick={() => setActiveTab('dashboard')}
@@ -348,6 +385,76 @@ const SecurityHub: React.FC = () => {
 
       {activeTab === 'dashboard' && (
       <>
+        {/* Log Advisor Modal */}
+        {showLogAdvisor && (
+             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+                <div className="bg-white rounded-xl p-6 max-w-2xl w-full shadow-2xl">
+                     <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                             <Sparkles className="text-indigo-600" /> Security Log Advisor
+                        </h3>
+                        <button onClick={() => setShowLogAdvisor(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                     </div>
+
+                     {!logAnalysis ? (
+                         <div className="text-center py-12">
+                             {analyzingLogs ? (
+                                 <div className="flex flex-col items-center gap-3">
+                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                     <p className="text-gray-500">Analyzing security logs with AI...</p>
+                                 </div>
+                             ) : (
+                                 <div className="space-y-4">
+                                     <p className="text-gray-600">Generate an AI report based on recent firewall blocks, login attempts, and threats.</p>
+                                     <button
+                                         onClick={handleAnalyzeLogs}
+                                         className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-md transition"
+                                     >
+                                         Generate Report
+                                     </button>
+                                 </div>
+                             )}
+                         </div>
+                     ) : (
+                         <div className="space-y-4">
+                             <div className={`p-4 rounded-lg border-l-4 ${
+                                 logAnalysis.threatLevel === 'Critical' ? 'bg-red-50 border-red-500 text-red-900' :
+                                 logAnalysis.threatLevel === 'Medium' ? 'bg-amber-50 border-amber-500 text-amber-900' :
+                                 'bg-green-50 border-green-500 text-green-900'
+                             }`}>
+                                 <div className="flex justify-between items-center mb-1">
+                                     <span className="font-bold text-lg">{logAnalysis.verdict}</span>
+                                     <span className="text-sm font-semibold uppercase tracking-wide opacity-75">Threat Level: {logAnalysis.threatLevel}</span>
+                                 </div>
+                                 <p className="text-sm opacity-90">{logAnalysis.summary}</p>
+                             </div>
+
+                             <div>
+                                 <h4 className="font-semibold text-gray-800 mb-2">Recommended Actions:</h4>
+                                 <ul className="space-y-2">
+                                     {logAnalysis.actions?.map((action: string, i: number) => (
+                                         <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                                             <CheckCircle size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
+                                             <span>{action}</span>
+                                         </li>
+                                     ))}
+                                 </ul>
+                             </div>
+
+                             <div className="flex justify-end pt-4">
+                                <button
+                                    onClick={() => { setLogAnalysis(null); setShowLogAdvisor(false); }}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium"
+                                >
+                                    Close Report
+                                </button>
+                             </div>
+                         </div>
+                     )}
+                </div>
+             </div>
+        )}
+
         {/* AI Analysis Modal */}
         {aiAnalysis && (
              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] animate-in fade-in duration-200">
