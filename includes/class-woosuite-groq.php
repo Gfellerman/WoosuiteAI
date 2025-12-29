@@ -5,6 +5,11 @@ class WooSuite_Groq {
     private $api_key;
     private $api_url = 'https://api.groq.com/openai/v1/chat/completions';
 
+    // Model Constants
+    const MODEL_MAIN = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    const MODEL_GUARD = 'meta-llama/llama-guard-4-12b';
+    const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Only vision model available currently
+
     public function __construct() {
         // We reuse the existing option key to preserve user input
         // if they already pasted the Groq key into the 'Gemini' field.
@@ -17,7 +22,7 @@ class WooSuite_Groq {
         }
 
         $body = array(
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => self::MODEL_MAIN,
             'messages' => array(
                 array(
                     'role' => 'user',
@@ -78,7 +83,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => self::MODEL_MAIN,
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -121,7 +126,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => self::MODEL_MAIN,
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -168,7 +173,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => self::MODEL_MAIN,
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -210,8 +215,10 @@ class WooSuite_Groq {
             }
         ";
 
+        // Use MAIN model (Scout 17b) as it is better at reasoning than Guard for explanation.
+        // Guard is for safety classification (Input/Output), not malware analysis per se.
         $body = array(
-            'model' => 'llama-3.3-70b-versatile',
+            'model' => self::MODEL_MAIN,
             'messages' => array(
                 array(
                     'role' => 'system',
@@ -274,9 +281,8 @@ class WooSuite_Groq {
         ";
 
         // Use Llama 3.2 Vision (11b) for image analysis (only one supporting images currently)
-        // Note: Llama 3.3 70b is text only.
         $body = array(
-            'model' => 'llama-3.2-11b-vision-preview',
+            'model' => self::MODEL_VISION,
             'messages' => array(
                 array(
                     'role' => 'user',
