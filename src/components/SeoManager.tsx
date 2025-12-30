@@ -236,9 +236,9 @@ const SeoManager: React.FC = () => {
 
           setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
 
-          // Smart Throttle: Sleep 2s between items to prevent hitting limits
+          // Smart Throttle: Sleep 4s between items to prevent hitting limits (Target ~15 RPM)
           if (i < selectedIds.length - 1) {
-              await sleep(2000);
+              await sleep(4000);
           }
       }
       setIsClientBatch(false);

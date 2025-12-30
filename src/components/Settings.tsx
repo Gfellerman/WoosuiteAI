@@ -5,6 +5,11 @@ const Settings: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [systemKeyPresent, setSystemKeyPresent] = useState(false);
 
+  // Custom API / BYO-LLM State
+  const [useCustomApi, setUseCustomApi] = useState(false);
+  const [customApiUrl, setCustomApiUrl] = useState('');
+  const [customModelId, setCustomModelId] = useState('');
+
   // Save State
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
@@ -34,6 +39,21 @@ const Settings: React.FC = () => {
             setSystemKeyPresent(true);
         }
     }
+
+    // Fetch full settings (including Custom API) from backend
+    if (window.woosuiteData?.apiUrl) {
+        fetch(`${window.woosuiteData.apiUrl}/settings`, {
+            headers: { 'X-WP-Nonce': window.woosuiteData.nonce }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.apiKey) setApiKey(data.apiKey);
+            setUseCustomApi(data.useCustomApi || false);
+            setCustomApiUrl(data.customApiUrl || '');
+            setCustomModelId(data.customModelId || '');
+        })
+        .catch(e => console.error("Failed to load settings:", e));
+    }
   }, []);
 
   const handleSave = async () => {
@@ -57,7 +77,12 @@ const Settings: React.FC = () => {
                     'Content-Type': 'application/json',
                     'X-WP-Nonce': window.woosuiteData.nonce
                 },
-                body: JSON.stringify({ apiKey: apiKey.trim() })
+                body: JSON.stringify({
+                    apiKey: apiKey.trim(),
+                    useCustomApi,
+                    customApiUrl,
+                    customModelId
+                })
             });
 
             if (!res.ok) {
@@ -272,6 +297,54 @@ const Settings: React.FC = () => {
                         <div className="flex items-center gap-4 p-4 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
                             <Zap size={18} />
                             <span>Your API Key is stored securely in the database and used for all AI requests.</span>
+                        </div>
+
+                        {/* Custom API / BYO-LLM Section */}
+                        <div className="border-t border-gray-100 pt-6 mt-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="font-semibold text-gray-800">Bring Your Own LLM</h3>
+                                    <p className="text-xs text-gray-500">Connect to Local LLMs (Ollama) or other providers (z.ai, OpenAI).</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm font-medium text-gray-700 cursor-pointer" htmlFor="useCustomApi">Use Custom API</label>
+                                    <input
+                                        id="useCustomApi"
+                                        type="checkbox"
+                                        checked={useCustomApi}
+                                        onChange={(e) => setUseCustomApi(e.target.checked)}
+                                        className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300"
+                                    />
+                                </div>
+                            </div>
+
+                            {useCustomApi && (
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="customApiUrl">API Endpoint URL</label>
+                                        <input
+                                            id="customApiUrl"
+                                            type="text"
+                                            value={customApiUrl}
+                                            onChange={(e) => setCustomApiUrl(e.target.value)}
+                                            placeholder="https://api.openai.com/v1/chat/completions"
+                                            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none font-mono text-sm"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Full URL to the chat completions endpoint.</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="customModelId">Model ID</label>
+                                        <input
+                                            id="customModelId"
+                                            type="text"
+                                            value={customModelId}
+                                            onChange={(e) => setCustomModelId(e.target.value)}
+                                            placeholder="gpt-4o, llama3:latest, glm-4"
+                                            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none font-mono text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
