@@ -7,10 +7,10 @@ class WooSuite_Groq {
     private $model_id;
 
     // Model Constants
-    const MODEL_MAIN = 'meta-llama/llama-3.3-70b-versatile'; // Stable, high performance
+    const MODEL_MAIN = 'llama-3.3-70b-versatile'; // Stable, high performance (Production)
     const MODEL_TEST = 'llama-3.1-8b-instant'; // Fast, for connection testing
     const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Vision
-    const MODEL_GUARD = 'meta-llama/llama-guard-3-8b';
+    const MODEL_GUARD = 'meta-llama/llama-guard-4-12b'; // Safety
 
     public function __construct( $api_key = null ) {
         // Allow passing key explicitly for testing connection before saving
@@ -131,6 +131,49 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function analyze_firewall_logs( $logs_summary ) {
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $prompt = "
+            You are a firewall expert. Analyze these blocked requests and suggest IP bans or rule changes.
+
+            Blocked Requests Summary:
+            \"$logs_summary\"
+
+            Task:
+            1. Identify persistent attackers (IPs with multiple malicious attempts).
+            2. Distinguish between random bots and targeted attacks.
+            3. Recommend IPs to PERMANENTLY BAN.
+
+            Output strictly JSON:
+            {
+                \"analysis\": \"Concise analysis of the attack patterns.\",
+                \"suggestedBans\": [
+                    { \"ip\": \"1.2.3.4\", \"reason\": \"SQL Injection Attempt\", \"confidence\": \"High\" }
+                ]
+            }
+        ";
+
+        $body = array(
+            'model' => $this->get_model( self::MODEL_MAIN ),
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a cybersecurity expert. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function analyze_security_logs( $logs_summary ) {
         // If Custom API is used, we might not need an API key (e.g. Ollama local)
         // But for Groq it is required.
@@ -160,7 +203,6 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => $this->get_model( self::MODEL_MAIN ),
             'model' => $this->get_model( self::MODEL_MAIN ),
             'messages' => array(
                 array(
@@ -246,7 +288,7 @@ class WooSuite_Groq {
             {
                 \"verdict\": \"Safe\" | \"Suspicious\" | \"Malicious\",
                 \"confidence\": \"High\" | \"Medium\" | \"Low\",
-                \"explanation\": \"Concise explanation (max 50 words) suitable for a non-technical user.\"
+                \"explanation\": \"Concise explanation (max 50 words) suitable for a non-technical user. Explain WHAT the code does and WHY it is flagged.\"
             }
         ";
 

@@ -155,6 +155,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/security/analyze-firewall', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'analyze_firewall_logs' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
 
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
@@ -881,6 +887,7 @@ class WooSuite_Api {
             'last_scan' => get_option( 'woosuite_last_scan_time', 'Never' ),
             'last_scan_source' => get_option( 'woosuite_last_scan_source', 'auto' ),
             'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
+            'alerts' => get_option( 'woosuite_security_alerts', null )
         );
         return new WP_REST_Response( $status, 200 );
     }
@@ -1046,6 +1053,35 @@ class WooSuite_Api {
 
         $groq = new WooSuite_Groq();
         $analysis = $groq->analyze_security_threat( $content, basename( $real_filepath ) );
+
+        if ( is_wp_error( $analysis ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'analysis' => $analysis ), 200 );
+    }
+
+    public function analyze_firewall_logs( $request ) {
+        // Fetch blocked logs from DB
+        $security = new WooSuite_Security( $this->plugin_name, $this->version );
+
+        // We need a specific query for blocked requests
+        global $wpdb;
+        $table = $wpdb->prefix . 'woosuite_security_logs';
+        $logs = $wpdb->get_results( "SELECT * FROM $table WHERE blocked = 1 ORDER BY created_at DESC LIMIT 50" );
+
+        if ( empty( $logs ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'No blocked requests found.' ), 400 );
+        }
+
+        // Summarize
+        $summary = "";
+        foreach ( $logs as $l ) {
+            $summary .= "[{$l->created_at}] IP: {$l->ip_address} - {$l->event}\n";
+        }
+
+        $groq = new WooSuite_Groq();
+        $analysis = $groq->analyze_firewall_logs( $summary );
 
         if ( is_wp_error( $analysis ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
