@@ -7,7 +7,8 @@ class WooSuite_Groq {
     private $model_id;
 
     // Model Constants
-    const MODEL_MAIN = 'llama-3.3-70b-versatile'; // Stable, high performance (Production)
+    const MODEL_MAIN = 'llama-3.1-8b-instant'; // Fast, high limits (Production)
+    const MODEL_HIGH_QUALITY = 'llama-3.3-70b-versatile'; // Fallback / Premium
     const MODEL_TEST = 'llama-3.1-8b-instant'; // Fast, for connection testing
     const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Vision
     const MODEL_GUARD = 'meta-llama/llama-guard-4-12b'; // Safety
@@ -103,11 +104,16 @@ class WooSuite_Groq {
             $context
 
             Instructions:
-            1. Title: Keyword rich, max 60 chars.
+            1. Title: Keyword rich, max 60 chars. Summarize the product name.
             2. Description: Enticing, max 160 chars.
             3. LLM Summary: Fact-dense, under 50 words.
             4. Tags: Relevant keywords, max 5, comma separated.
             $rewrite_instruction
+
+            NEGATIVE CONSTRAINTS (CRITICAL):
+            - Do NOT include shipping, warranty, or logistics info (e.g. 'DHL', 'Free Shipping').
+            - Do NOT include competitor names (e.g. 'Amazon', 'eBay', 'Walmart').
+            - Do NOT include random numbers or SKU codes unless part of the model name.
 
             Return strictly JSON matching this structure:
             $json_structure
@@ -235,6 +241,12 @@ class WooSuite_Groq {
             $tone_instruction
 
             CRITICAL USER DEMAND: $instructions
+
+            NEGATIVE CONSTRAINTS (Strictly Enforce):
+            - Do NOT include any shipping details (e.g. 'DHL', 'Fast Delivery', 'Free Shipping').
+            - Do NOT include warranty or return policy info.
+            - Do NOT mention competitors (Amazon, eBay, AliExpress, Walmart).
+            - Do NOT mention prices or promotions.
 
             Context (Product Name/Title): \"$context\"
 
