@@ -303,6 +303,12 @@ class WooSuite_Api {
         $result = $groq->test_connection();
 
         if ( is_wp_error( $result ) ) {
+            // Log Failure
+            $debug_logs = get_option('woosuite_debug_log', array());
+            $fail_entry = "[$timestamp] [ERROR] Test Connection Failed: " . $result->get_error_message();
+            array_unshift($debug_logs, $fail_entry);
+            update_option('woosuite_debug_log', array_slice($debug_logs, 0, 50));
+
             return new WP_REST_Response( array(
                 'success' => false,
                 'message' => $result->get_error_message(),
@@ -310,6 +316,12 @@ class WooSuite_Api {
                 'data' => $result->get_error_data()
             ), 500 );
         }
+
+        // Log Success
+        $debug_logs = get_option('woosuite_debug_log', array());
+        $success_entry = "[$timestamp] [INFO] Test Connection Successful.";
+        array_unshift($debug_logs, $success_entry);
+        update_option('woosuite_debug_log', array_slice($debug_logs, 0, 50));
 
         // Handle warning from fallback model usage
         $warning = isset($result['warning']) ? $result['warning'] : null;

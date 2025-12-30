@@ -379,6 +379,16 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    private function log_error( $message ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        $timestamp = date( 'Y-m-d H:i:s' );
+        array_unshift( $logs, "[$timestamp] [ERROR] $message" );
+        if ( count( $logs ) > 50 ) {
+            $logs = array_slice( $logs, 0, 50 );
+        }
+        update_option( 'woosuite_debug_log', $logs );
+    }
+
     private function call_api( $body, $json_mode = true ) {
         $response = wp_remote_post( $this->api_url, array(
             'headers' => array(
@@ -390,6 +400,7 @@ class WooSuite_Groq {
         ) );
 
         if ( is_wp_error( $response ) ) {
+            $this->log_error( 'Connection Error: ' . $response->get_error_message() );
             return $response;
         }
 
@@ -397,18 +408,19 @@ class WooSuite_Groq {
         $raw_body = wp_remote_retrieve_body( $response );
 
         if ( $code === 429 ) {
-            return new WP_Error( 'rate_limit', 'Groq API Rate Limit Reached.' );
+            $this->log_error( 'Groq Rate Limit Reached (429).' );
+            return new WP_Error( 'rate_limit', 'Groq API Rate Limit Reached. Please wait a moment.' );
         }
 
         if ( $code !== 200 ) {
-            // Log generic errors
-            error_log('WooSuite Groq Error: ' . $raw_body);
+            $this->log_error( 'API Error (' . $code . '): ' . substr( $raw_body, 0, 200 ) );
             return new WP_Error( 'api_error', 'Groq API Error: ' . $code . ' - ' . $raw_body );
         }
 
         $data = json_decode( $raw_body, true );
 
         if ( empty( $data['choices'][0]['message']['content'] ) ) {
+            $this->log_error( 'Empty response content from API.' );
             return new WP_Error( 'api_empty', 'No response content from Groq.' );
         }
 
@@ -424,8 +436,8 @@ class WooSuite_Groq {
             }
 
             if ( json_last_error() !== JSON_ERROR_NONE ) {
-                 error_log( 'WooSuite JSON Fail. Error: ' . json_last_error_msg() );
-                 error_log( 'Original: ' . $content );
+                 $this->log_error( 'JSON Parse Fail: ' . json_last_error_msg() );
+                 error_log( 'WooSuite JSON Fail. Original: ' . $content );
                  return new WP_Error( 'json_error', 'Invalid JSON from Groq.' );
             }
             return $json;
