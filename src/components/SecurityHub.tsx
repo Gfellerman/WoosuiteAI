@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SecurityLog } from '../types';
-import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle, Scan, X, Trash2, Archive, CheckCircle, RotateCcw, Sparkles } from 'lucide-react';
+import { Shield, ShieldAlert, Globe, Lock, Activity, EyeOff, FileSearch, KeyRound, AlertTriangle, Scan, X, Trash2, Archive, CheckCircle, RotateCcw, Sparkles, Flame } from 'lucide-react';
 
 const SecurityHub: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'quarantine'>('dashboard');
@@ -20,6 +20,7 @@ const SecurityHub: React.FC = () => {
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [lastScan, setLastScan] = useState<string>('Never');
   const [lastScanSource, setLastScanSource] = useState<string>('auto');
+  const [alerts, setAlerts] = useState<any>(null); // Background AI Alerts
 
   // Deep Scan State
   const [showDeepScanModal, setShowDeepScanModal] = useState(false);
@@ -35,6 +36,12 @@ const SecurityHub: React.FC = () => {
   const [showLogAdvisor, setShowLogAdvisor] = useState(false);
   const [logAnalysis, setLogAnalysis] = useState<any>(null);
   const [analyzingLogs, setAnalyzingLogs] = useState(false);
+
+  // Firewall Analysis State
+  const [showFirewallAdvisor, setShowFirewallAdvisor] = useState(false);
+  const [firewallAnalysis, setFirewallAnalysis] = useState<any>(null);
+  const [analyzingFirewall, setAnalyzingFirewall] = useState(false);
+
 
   const { apiUrl, nonce, homeUrl } = (window as any).woosuiteData || {};
 
@@ -78,6 +85,9 @@ const SecurityHub: React.FC = () => {
             setLoginMaxRetries(data.login_max_retries || 3);
             setLastScan(data.last_scan);
             setLastScanSource(data.last_scan_source || 'auto');
+            if (data.alerts) {
+                setAlerts(data.alerts);
+            }
         }
     } catch (e) {
         console.error("Failed to fetch security status", e);
@@ -338,22 +348,74 @@ const SecurityHub: React.FC = () => {
     }
   };
 
+  const handleAnalyzeFirewall = async () => {
+    setAnalyzingFirewall(true);
+    setFirewallAnalysis(null);
+    try {
+        const res = await fetch(`${apiUrl}/security/analyze-firewall`, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce }
+        });
+        const data = await res.json();
+        if (data.success && data.analysis) {
+            setFirewallAnalysis(data.analysis);
+        } else {
+            alert('Firewall Analysis failed: ' + (data.message || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Analysis request failed.');
+    } finally {
+        setAnalyzingFirewall(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+
+       {/* Security Alerts Banner (Background AI Monitor) */}
+       {alerts && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex justify-between items-start animate-in fade-in slide-in-from-top-2">
+                <div>
+                    <h3 className="text-red-800 font-bold flex items-center gap-2">
+                        <ShieldAlert size={20} /> Security Alert: {alerts.verdict}
+                    </h3>
+                    <p className="text-red-700 text-sm mt-1">{alerts.summary}</p>
+                    <div className="mt-2 text-xs text-red-600 font-semibold uppercase">
+                        Threat Level: {alerts.threatLevel}
+                    </div>
+                </div>
+                <button
+                    onClick={() => setAlerts(null)} // Dismiss locally for session
+                    className="text-red-400 hover:text-red-600"
+                >
+                    <X size={18} />
+                </button>
+            </div>
+       )}
+
        <div className="flex justify-between items-center">
         <div>
             <h2 className="text-2xl font-bold text-gray-800">Security & Firewall</h2>
             <p className="text-gray-500">Real-time threat monitoring, malware scanning, and spam protection.</p>
         </div>
         <div className="flex gap-2">
-            {/* Log Advisor Button */}
+            {/* Action Buttons */}
             {activeTab === 'dashboard' && (
-                <button
-                    onClick={() => setShowLogAdvisor(true)}
-                    className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition flex items-center gap-2 shadow-sm mr-2"
-                >
-                    <Sparkles size={18} /> AI Log Advisor
-                </button>
+                <>
+                    <button
+                        onClick={() => setShowFirewallAdvisor(true)}
+                        className="bg-orange-50 text-orange-600 px-3 py-2 rounded-lg font-medium hover:bg-orange-100 transition flex items-center gap-2 shadow-sm"
+                    >
+                        <Flame size={18} /> Smart WAF
+                    </button>
+                    <button
+                        onClick={() => setShowLogAdvisor(true)}
+                        className="bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg font-medium hover:bg-indigo-100 transition flex items-center gap-2 shadow-sm mr-2"
+                    >
+                        <Sparkles size={18} /> Log Advisor
+                    </button>
+                </>
             )}
 
             <div className="bg-gray-100 p-1 rounded-lg flex text-sm font-medium">
@@ -455,7 +517,90 @@ const SecurityHub: React.FC = () => {
              </div>
         )}
 
-        {/* AI Analysis Modal */}
+        {/* Smart WAF Advisor Modal */}
+        {showFirewallAdvisor && (
+             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+                <div className="bg-white rounded-xl p-6 max-w-2xl w-full shadow-2xl">
+                     <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                             <Flame className="text-orange-500" /> AI Firewall Intelligence
+                        </h3>
+                        <button onClick={() => setShowFirewallAdvisor(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
+                     </div>
+
+                     {!firewallAnalysis ? (
+                         <div className="text-center py-12">
+                             {analyzingFirewall ? (
+                                 <div className="flex flex-col items-center gap-3">
+                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                                     <p className="text-gray-500">Analyzing attack patterns with AI...</p>
+                                 </div>
+                             ) : (
+                                 <div className="space-y-4">
+                                     <p className="text-gray-600">Analyze recent firewall blocks to identify persistent attackers and suggest bans.</p>
+                                     <button
+                                         onClick={handleAnalyzeFirewall}
+                                         className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium shadow-md transition"
+                                     >
+                                         Analyze Attacks
+                                     </button>
+                                 </div>
+                             )}
+                         </div>
+                     ) : (
+                         <div className="space-y-4">
+                             <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 text-orange-900 text-sm">
+                                 <strong>Analysis:</strong> {firewallAnalysis.analysis}
+                             </div>
+
+                             <h4 className="font-semibold text-gray-800">Suggested Bans:</h4>
+                             {(!firewallAnalysis.suggestedBans || firewallAnalysis.suggestedBans.length === 0) ? (
+                                 <p className="text-sm text-gray-500 italic">No persistent threats identified needing permanent bans.</p>
+                             ) : (
+                                 <div className="overflow-hidden border border-gray-200 rounded-lg">
+                                     <table className="w-full text-sm text-left">
+                                         <thead className="bg-gray-50 text-gray-500">
+                                             <tr>
+                                                 <th className="p-2">IP Address</th>
+                                                 <th className="p-2">Reason</th>
+                                                 <th className="p-2 text-right">Action</th>
+                                             </tr>
+                                         </thead>
+                                         <tbody className="divide-y divide-gray-100">
+                                             {firewallAnalysis.suggestedBans.map((ban: any, i: number) => (
+                                                 <tr key={i}>
+                                                     <td className="p-2 font-mono">{ban.ip}</td>
+                                                     <td className="p-2 text-gray-600">{ban.reason}</td>
+                                                     <td className="p-2 text-right">
+                                                         <button
+                                                            className="text-red-600 hover:bg-red-50 px-2 py-1 rounded text-xs font-bold border border-red-200"
+                                                            onClick={() => alert(`Simulated Ban for ${ban.ip}`)}
+                                                         >
+                                                             BAN IP
+                                                         </button>
+                                                     </td>
+                                                 </tr>
+                                             ))}
+                                         </tbody>
+                                     </table>
+                                 </div>
+                             )}
+
+                             <div className="flex justify-end pt-4">
+                                <button
+                                    onClick={() => { setFirewallAnalysis(null); setShowFirewallAdvisor(false); }}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium"
+                                >
+                                    Close
+                                </button>
+                             </div>
+                         </div>
+                     )}
+                </div>
+             </div>
+        )}
+
+        {/* AI Analysis Modal (File) */}
         {aiAnalysis && (
              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] animate-in fade-in duration-200">
                 <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl">
@@ -477,6 +622,7 @@ const SecurityHub: React.FC = () => {
                                  <span className="font-bold text-lg">{aiAnalysis.verdict}</span>
                                  <span className="text-xs uppercase tracking-wide opacity-75">Confidence: {aiAnalysis.confidence}</span>
                              </div>
+                             <p className="text-sm mt-2 font-medium">Why?</p>
                              <p className="text-sm">{aiAnalysis.explanation}</p>
                          </div>
                      </div>

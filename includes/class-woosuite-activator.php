@@ -31,6 +31,11 @@ class WooSuite_Activator {
 			wp_schedule_event( time(), 'twicedaily', 'woosuite_scheduled_scan' );
 		}
 
+        // Schedule AI Log Monitor
+        if ( ! wp_next_scheduled( 'woosuite_daily_log_analysis' ) ) {
+            wp_schedule_event( time(), 'twicedaily', 'woosuite_daily_log_analysis' );
+        }
+
         flush_rewrite_rules();
 	}
 }

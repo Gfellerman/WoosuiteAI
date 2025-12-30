@@ -19,6 +19,7 @@ class WooSuite_Security {
 
         // Scheduled Scans
         add_action( 'woosuite_scheduled_scan', array( $this, 'perform_core_scan' ) );
+        add_action( 'woosuite_daily_log_analysis', array( $this, 'perform_log_analysis' ) );
 
         // Login Protection
         if ( get_option( 'woosuite_login_protection_enabled', 'yes' ) === 'yes' ) {
@@ -362,5 +363,36 @@ class WooSuite_Security {
             $limit,
             $offset
         ) );
+    }
+
+    /**
+     * Perform AI Analysis on Logs (Scheduled)
+     */
+    public function perform_log_analysis() {
+        // Fetch recent High severity logs from last 24 hours
+        global $wpdb;
+        $logs = $wpdb->get_results( "SELECT * FROM {$this->table_name} WHERE severity IN ('high', 'critical') AND created_at > NOW() - INTERVAL 1 DAY ORDER BY created_at DESC LIMIT 50" );
+
+        if ( empty( $logs ) ) {
+            delete_option( 'woosuite_security_alerts' ); // Clear alerts if safe
+            return;
+        }
+
+        // Prepare Summary
+        $summary = "Security Events (Last 24h):\n";
+        foreach ( $logs as $l ) {
+            $summary .= "[{$l->created_at}] IP: {$l->ip_address} - {$l->event} (Severity: {$l->severity})\n";
+        }
+
+        $groq = new WooSuite_Groq();
+        $analysis = $groq->analyze_security_logs( $summary );
+
+        if ( ! is_wp_error( $analysis ) && isset( $analysis['threatLevel'] ) ) {
+            if ( in_array( $analysis['threatLevel'], array( 'Medium', 'Critical' ) ) ) {
+                update_option( 'woosuite_security_alerts', $analysis );
+            } else {
+                delete_option( 'woosuite_security_alerts' );
+            }
+        }
     }
 }
