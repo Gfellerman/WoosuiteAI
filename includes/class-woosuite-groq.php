@@ -7,10 +7,10 @@ class WooSuite_Groq {
     private $model_id;
 
     // Model Constants
-    const MODEL_MAIN = 'llama-3.1-8b-instant'; // Fast, high limits (Production)
-    const MODEL_HIGH_QUALITY = 'llama-3.3-70b-versatile'; // Fallback / Premium
-    const MODEL_TEST = 'llama-3.1-8b-instant'; // Fast, for connection testing
-    const MODEL_VISION = 'llama-3.2-11b-vision-preview'; // Vision
+    const MODEL_MAIN = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Unified Text & Vision (Production)
+    const MODEL_HIGH_QUALITY = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Fallback
+    const MODEL_TEST = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Connection Test
+    const MODEL_VISION = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Vision (Scout is Multimodal)
     const MODEL_GUARD = 'meta-llama/llama-guard-4-12b'; // Safety
 
     public function __construct( $api_key = null ) {

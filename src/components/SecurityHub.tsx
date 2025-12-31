@@ -851,8 +851,8 @@ const SecurityHub: React.FC = () => {
                             <tbody className="divide-y divide-gray-100">
                                 {quarantinedFiles.map((file) => (
                                     <tr key={file.id}>
-                                        <td className="p-3 font-medium text-gray-800">{file.filename}</td>
-                                        <td className="p-3 font-mono text-xs text-gray-500">{file.relative_path}</td>
+                                        <td className="p-3 font-medium text-gray-800">{file.id}</td>
+                                        <td className="p-3 font-mono text-xs text-gray-500">{file.original_path}</td>
                                         <td className="p-3 text-gray-500">{file.date}</td>
                                         <td className="p-3 flex justify-end gap-2">
                                             <button

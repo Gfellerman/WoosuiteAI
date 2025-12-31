@@ -207,20 +207,68 @@ class WooSuite_Security_Scanner {
         if ( ! $content ) return;
 
         foreach ( $this->scan_patterns as $pattern => $name ) {
-            if ( preg_match( '/' . $pattern . '/i', $content ) ) {
-                // Found a match
+            if ( preg_match( '/' . $pattern . '/i', $content, $matches ) ) {
+                // Found a match - BUT wait, ask AI first!
                 $rel_path = str_replace( ABSPATH, '', $filepath );
+
+                // Get context (surrounding lines) for AI
+                $context = $this->get_snippet_context( $content, $matches[0] );
+
+                // Ask Groq (AI)
+                $groq = new WooSuite_Groq();
+                $analysis = $groq->analyze_security_threat( $context, basename( $filepath ) );
+
+                $verdict = 'Suspicious'; // Default fallback
+                $explanation = 'Flagged by heuristic scanner.';
+                $confidence = 'Low';
+
+                if ( ! is_wp_error( $analysis ) && isset( $analysis['verdict'] ) ) {
+                    $verdict = $analysis['verdict'];
+                    $explanation = isset( $analysis['explanation'] ) ? $analysis['explanation'] : $explanation;
+                    $confidence = isset( $analysis['confidence'] ) ? $analysis['confidence'] : 'Medium';
+                }
+
+                // If AI says Safe with High confidence, we skip it (unless user wants verbose logs)
+                if ( $verdict === 'Safe' && $confidence === 'High' ) {
+                    continue;
+                }
 
                 $results[] = array(
                     'file' => $rel_path,
                     'issue' => $name,
-                    'severity' => 'high', // All patterns are high risk
-                    'date' => current_time( 'mysql' )
+                    'severity' => ($verdict === 'Malicious') ? 'critical' : 'medium',
+                    'date' => current_time( 'mysql' ),
+                    'ai_verdict' => $verdict,
+                    'ai_explanation' => $explanation
                 );
 
                 // One match per file is enough to flag it
                 break;
             }
         }
+    }
+
+    private function get_snippet_context( $content, $match ) {
+        $lines = explode( "\n", $content );
+        $match_line = -1;
+
+        foreach ( $lines as $i => $line ) {
+            if ( strpos( $line, $match ) !== false ) {
+                $match_line = $i;
+                break;
+            }
+        }
+
+        if ( $match_line === -1 ) return substr( $content, 0, 500 ); // Fallback
+
+        $start = max( 0, $match_line - 5 );
+        $end = min( count( $lines ) - 1, $match_line + 5 );
+
+        $snippet = "";
+        for ( $j = $start; $j <= $end; $j++ ) {
+            $snippet .= $lines[$j] . "\n";
+        }
+
+        return $snippet;
     }
 }
