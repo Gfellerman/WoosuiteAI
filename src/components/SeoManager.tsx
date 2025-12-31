@@ -221,7 +221,17 @@ const SeoManager: React.FC = () => {
                 const json = await res.json();
                 if (json.success && json.data) {
                     const updates = mapResultToItem(json.data, activeTab);
-                    setItems(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+
+                    // Optimistic update of local state to immediately reflect "Optimized" status
+                    // This fixes the issue where items remain "Unoptimized" in the UI until refresh
+                    setItems(prev => prev.map(p => {
+                         if (p.id === id) {
+                             // Merge updates. Ensure we clear any error flags.
+                             return { ...p, ...updates, lastError: undefined };
+                         }
+                         return p;
+                    }));
+
                     success = true;
                 } else {
                     throw new Error(json.message || "Unknown error");
@@ -236,9 +246,9 @@ const SeoManager: React.FC = () => {
 
           setClientBatchProgress(prev => ({ ...prev, current: i + 1 }));
 
-          // Smart Throttle: Sleep 6s between items to prevent hitting limits (Target ~10 RPM for safety)
+          // Smart Throttle: Sleep 500ms between items (Llama 4 High Limits)
           if (i < idsToProcess.length - 1) {
-              await sleep(6000);
+              await sleep(500);
           }
       }
       setIsClientBatch(false);

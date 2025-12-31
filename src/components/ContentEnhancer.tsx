@@ -111,10 +111,16 @@ const ContentEnhancer: React.FC = () => {
                       if (activeField === 'short_description') update.proposedShortDescription = data.rewritten;
                       return { ...p, ...update };
                   }));
+              } else {
+                 // Handle specific API error message
+                 alert('Rewrite failed: ' + (data.message || 'Unknown error'));
               }
+          } else {
+             alert('Server Error during rewrite.');
           }
       } catch (e) {
           console.error(e);
+          alert('Network error.');
       } finally {
           setGenerating(null);
       }
