@@ -344,6 +344,7 @@ class WooSuite_Api {
         $filter = $request->get_param('filter'); // 'unoptimized' or empty
         $category = $request->get_param('category');
         $status = $request->get_param('status'); // 'enhanced', 'not_enhanced'
+        $search = $request->get_param('search'); // NEW: Search support
         $return_ids_only = $request->get_param('fields') === 'ids';
 
         $args = array(
@@ -362,6 +363,11 @@ class WooSuite_Api {
             $args['post_mime_type'] = 'image';
         } else {
             $args['post_type'] = $type; // post, page, product
+        }
+
+        // Search Filter
+        if ( ! empty( $search ) ) {
+            $args['s'] = sanitize_text_field( $search );
         }
 
         // Category Filter
@@ -383,7 +389,8 @@ class WooSuite_Api {
         $debug_msg = 'API Query Args: ' . json_encode(array(
             'tax_query' => isset($args['tax_query']) ? $args['tax_query'] : 'none',
             'category_param' => $category,
-            'post_type' => $type
+            'post_type' => $type,
+            'search' => $search
         ));
         $timestamp = date('Y-m-d H:i:s');
         $debug_entry = "[$timestamp] [DEBUG] $debug_msg";
@@ -413,18 +420,28 @@ class WooSuite_Api {
 
         // Status Filter (Enhanced vs Not Enhanced)
         if ( $status === 'enhanced' ) {
+            // "Enhanced" means the item has been modified by AI (has history) OR has a pending proposal?
+            // User requirement: "As there is a track of what has been modified in order to undo the changes..."
+            // So we check for _woosuite_history_... keys.
+            // Since there are multiple history keys (title, content, excerpt, meta...), we use OR relation.
             $meta_query[] = array(
                 'relation' => 'OR',
+                array( 'key' => '_woosuite_history_post_title', 'compare' => 'EXISTS' ),
+                array( 'key' => '_woosuite_history_post_content', 'compare' => 'EXISTS' ),
+                array( 'key' => '_woosuite_history_post_excerpt', 'compare' => 'EXISTS' ),
+                // Also check if there is a pending proposal? User might want to see items with proposals ready to review.
                 array( 'key' => '_woosuite_proposed_title', 'compare' => 'EXISTS' ),
                 array( 'key' => '_woosuite_proposed_description', 'compare' => 'EXISTS' ),
-                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'EXISTS' ),
             );
         } elseif ( $status === 'not_enhanced' ) {
+            // "Not Enhanced" means NO history AND NO proposals.
             $meta_query[] = array(
                 'relation' => 'AND',
+                array( 'key' => '_woosuite_history_post_title', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_woosuite_history_post_content', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_woosuite_history_post_excerpt', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_proposed_title', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_proposed_description', 'compare' => 'NOT EXISTS' ),
-                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'NOT EXISTS' ),
             );
         }
 
@@ -463,7 +480,9 @@ class WooSuite_Api {
                 'proposedShortDescription' => get_post_meta( $post->ID, '_woosuite_proposed_short_description', true ),
                 'hasHistory' => ! empty( get_post_meta( $post->ID, '_woosuite_history_post_content', true ) ) ||
                                 ! empty( get_post_meta( $post->ID, '_woosuite_history__woosuite_meta_description', true ) ) ||
-                                ! empty( get_post_meta( $post->ID, '_woosuite_history__wp_attachment_image_alt', true ) ),
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history__wp_attachment_image_alt', true ) ) ||
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history_post_title', true ) ) ||
+                                ! empty( get_post_meta( $post->ID, '_woosuite_history_post_excerpt', true ) ),
                 'tags' => array()
             );
 
@@ -679,14 +698,24 @@ class WooSuite_Api {
         $params = $request->get_json_params();
         $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
         $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
+        // Allow manual override of the value (User Edited Proposal)
+        // If 'value' param is present, use it. Otherwise, fetch from meta.
+        $value_override = isset( $params['value'] ) ? $params['value'] : null;
 
         $post = get_post($id);
         if (!$post) return new WP_REST_Response(array('success' => false, 'message' => 'Not found'), 404);
 
-        $proposed = get_post_meta( $id, '_woosuite_proposed_' . $field, true );
-        if ( empty( $proposed ) ) {
-             return new WP_REST_Response( array( 'success' => false, 'message' => 'No proposed content found' ), 400 );
+        $proposed = $value_override;
+        if ( $proposed === null ) {
+            $proposed = get_post_meta( $id, '_woosuite_proposed_' . $field, true );
         }
+
+        if ( empty( $proposed ) ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => 'No content provided to apply.' ), 400 );
+        }
+
+        // Sanitize before saving
+        $proposed = wp_kses_post( $proposed );
 
         $args = array( 'ID' => $id );
         if ( $field === 'title' ) {

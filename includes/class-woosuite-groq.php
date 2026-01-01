@@ -262,7 +262,7 @@ class WooSuite_Groq {
         ";
 
         $body = array(
-            'model' => self::MODEL_MAIN,
+            'model' => $this->get_model( self::MODEL_MAIN ),
             'messages' => array(
                 array(
                     'role' => 'system',

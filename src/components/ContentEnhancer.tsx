@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { ContentItem, ContentType } from '../types';
-import { PenTool, Check, X, RefreshCw, Box, FileText, Layout, Play, RotateCcw, Save, Sparkles, Filter, ChevronLeft, ChevronRight, Loader, Tag, List } from 'lucide-react';
+import { PenTool, Check, X, RefreshCw, Box, FileText, Layout, Play, RotateCcw, Save, Sparkles, Filter, ChevronLeft, ChevronRight, Loader, Tag, List, Search as SearchIcon } from 'lucide-react';
 
 const ContentEnhancer: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContentType>('product');
   const [activeField, setActiveField] = useState<'title' | 'description' | 'short_description'>('description');
   const [tone, setTone] = useState('Professional');
   const [instructions, setInstructions] = useState('');
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Filters & Limits
   const [limit, setLimit] = useState(20);
@@ -17,6 +21,10 @@ const ContentEnhancer: React.FC = () => {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<number | null>(null);
+
+  // Editable Proposals State
+  // Map of ItemID -> Proposed Text
+  const [editedProposals, setEditedProposals] = useState<{[key: number]: string}>({});
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -31,17 +39,26 @@ const ContentEnhancer: React.FC = () => {
 
   const { apiUrl, nonce } = (window as any).woosuiteData || {};
 
+  // Debounce search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+        setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   useEffect(() => {
     fetchCategories();
     setPage(1); // Reset page on tab change
     setCategory(''); // Reset category on tab change
+    setEditedProposals({}); // Clear edits on tab change
   }, [activeTab]);
 
   useEffect(() => {
     // Clear items immediately to prevent UI flicker/confusion when filter changes
     setItems([]);
     fetchItems();
-  }, [activeTab, page, limit, category, status]);
+  }, [activeTab, page, limit, category, status, debouncedSearch]);
 
   const fetchCategories = async () => {
       if (!apiUrl) return;
@@ -63,6 +80,7 @@ const ContentEnhancer: React.FC = () => {
         let url = `${apiUrl}/content?type=${activeTab}&limit=${limit}&page=${page}`;
         if (category) url += `&category=${category}`;
         if (status !== 'all') url += `&status=${status}`;
+        if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
 
         const res = await fetch(url, {
             headers: { 'X-WP-Nonce': nonce }
@@ -111,6 +129,12 @@ const ContentEnhancer: React.FC = () => {
                       if (activeField === 'short_description') update.proposedShortDescription = data.rewritten;
                       return { ...p, ...update };
                   }));
+                  // Also clear any manual edits for this item since we just regenerated
+                  setEditedProposals(prev => {
+                      const newState = {...prev};
+                      delete newState[item.id];
+                      return newState;
+                  });
               } else {
                  // Handle specific API error message
                  alert('Rewrite failed: ' + (data.message || 'Unknown error'));
@@ -127,16 +151,31 @@ const ContentEnhancer: React.FC = () => {
   };
 
   const handleApply = async (item: ContentItem) => {
+      // Check if we have a manual edit, otherwise use the original proposal
+      const manualEdit = editedProposals[item.id];
+      const originalProposal = getProposedValue(item);
+      const valueToApply = manualEdit !== undefined ? manualEdit : originalProposal;
+
       try {
           const res = await fetch(`${apiUrl}/content/apply`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-              body: JSON.stringify({ id: item.id, field: activeField })
+              body: JSON.stringify({
+                  id: item.id,
+                  field: activeField,
+                  value: valueToApply // Pass the potentially edited value
+              })
           });
 
           if (res.ok) {
               // Refresh to see updated content as "Current"
               fetchItems();
+              // Clear edit state
+              setEditedProposals(prev => {
+                  const newState = {...prev};
+                  delete newState[item.id];
+                  return newState;
+              });
           }
       } catch (e) { console.error(e); }
   };
@@ -219,96 +258,110 @@ const ContentEnhancer: React.FC = () => {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <select
-                    value={activeField}
-                    onChange={(e) => setActiveField(e.target.value as any)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
-                >
-                    <option value="title">Product/Post Title</option>
-                    <option value="description">Description</option>
-                    <option value="short_description">Short Description</option>
-                </select>
+            <div className="flex flex-col gap-3 w-full md:w-auto">
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 w-full md:w-48"
+                        />
+                    </div>
 
-                <select
-                    value={tone}
-                    onChange={(e) => setTone(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                >
-                    <option value="Professional">Professional</option>
-                    <option value="Technical">Technical</option>
-                    <option value="Persuasive">Persuasive</option>
-                    <option value="Casual">Casual</option>
-                    <option value="Fun">Fun & Witty</option>
-                    <option value="SEO Optimized">SEO Optimized</option>
-                </select>
-
-                <input
-                    type="text"
-                    placeholder="Extra instructions..."
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-40"
-                />
-
-                {/* Status Filter */}
-                <select
-                    value={status}
-                    onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700"
-                >
-                    <option value="all">All Status</option>
-                    <option value="enhanced">Enhanced (Pending)</option>
-                    <option value="not_enhanced">Not Enhanced</option>
-                </select>
-
-                {/* Category Filter */}
-                {categories.length > 0 && (
                     <select
-                        value={category}
-                        onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700 max-w-[150px]"
+                        value={activeField}
+                        onChange={(e) => setActiveField(e.target.value as any)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-purple-500 outline-none"
                     >
-                        <option value="">All Categories</option>
-                        {categories.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
-                        ))}
+                        <option value="title">Product/Post Title</option>
+                        <option value="description">Description</option>
+                        <option value="short_description">Short Description</option>
                     </select>
-                )}
 
-                <div className="h-6 w-px bg-gray-300 mx-1"></div>
-
-                {/* Bulk Actions */}
-                {isBulkProcessing ? (
-                     <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                        <RefreshCw size={16} className="animate-spin" />
-                        {bulkProgress.current}/{bulkProgress.total}
-                    </div>
-                ) : (
-                    <button
-                        onClick={handleBulkRewrite}
-                        disabled={selectedIds.length === 0}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 transition"
-                        title="Generate proposals for selected items"
+                    <select
+                        value={tone}
+                        onChange={(e) => setTone(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                     >
-                        <Sparkles size={16} /> Rewrite ({selectedIds.length})
-                    </button>
-                )}
+                        <option value="Professional">Professional</option>
+                        <option value="Technical">Technical</option>
+                        <option value="Persuasive">Persuasive</option>
+                        <option value="Casual">Casual</option>
+                        <option value="Fun">Fun & Witty</option>
+                        <option value="SEO Optimized">SEO Optimized</option>
+                    </select>
 
-                {isBulkApplying ? (
-                    <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                        <Loader size={16} className="animate-spin" /> Applying...
-                    </div>
-                ) : (
-                    <button
-                        onClick={handleBulkApply}
-                        disabled={selectedIds.length === 0}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition"
-                        title="Apply proposed changes to selected items"
+                    <input
+                        type="text"
+                        placeholder="Extra instructions..."
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none w-40"
+                    />
+
+                    {/* Status Filter */}
+                    <select
+                        value={status}
+                        onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700"
                     >
-                        <Check size={16} /> Apply ({selectedIds.length})
-                    </button>
-                )}
+                        <option value="all">All Status</option>
+                        <option value="enhanced">Enhanced (Pending)</option>
+                        <option value="not_enhanced">Not Enhanced</option>
+                    </select>
+
+                    {/* Category Filter */}
+                    {categories.length > 0 && (
+                        <select
+                            value={category}
+                            onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50 text-gray-700 max-w-[150px]"
+                        >
+                            <option value="">All Categories</option>
+                            {categories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
+                            ))}
+                        </select>
+                    )}
+
+                    <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
+
+                    {/* Bulk Actions */}
+                    {isBulkProcessing ? (
+                        <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <RefreshCw size={16} className="animate-spin" />
+                            {bulkProgress.current}/{bulkProgress.total}
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleBulkRewrite}
+                            disabled={selectedIds.length === 0}
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 transition"
+                            title="Generate proposals for selected items"
+                        >
+                            <Sparkles size={16} /> Rewrite ({selectedIds.length})
+                        </button>
+                    )}
+
+                    {isBulkApplying ? (
+                        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <Loader size={16} className="animate-spin" /> Applying...
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleBulkApply}
+                            disabled={selectedIds.length === 0}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition"
+                            title="Apply proposed changes to selected items"
+                        >
+                            <Check size={16} /> Apply ({selectedIds.length})
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
 
@@ -348,15 +401,18 @@ const ContentEnhancer: React.FC = () => {
                                     className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                                 />
                             </th>
-                            <th className="p-4 font-semibold text-gray-600 text-sm w-1/4">Item</th>
+                            <th className="p-4 font-semibold text-gray-600 text-sm w-1/5">Item</th>
                             <th className="p-4 font-semibold text-gray-600 text-sm w-1/3">Current {activeField.replace('_', ' ')}</th>
-                            <th className="p-4 font-semibold text-gray-600 text-sm w-1/3">Proposed Change (AI)</th>
+                            <th className="p-4 font-semibold text-gray-600 text-sm w-1/3">Proposed Change (Editable)</th>
                             <th className="p-4 font-semibold text-gray-600 text-sm text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {items.map(item => {
-                            const proposed = getProposedValue(item);
+                            const originalProposal = getProposedValue(item);
+                            const currentEdit = editedProposals[item.id];
+                            const displayValue = currentEdit !== undefined ? currentEdit : (originalProposal || '');
+
                             return (
                                 <tr key={item.id} className="hover:bg-gray-50 transition">
                                     <td className="p-4 align-top">
@@ -374,14 +430,24 @@ const ContentEnhancer: React.FC = () => {
                                         <div className="text-xs text-gray-400">ID: {item.id}</div>
                                     </td>
                                     <td className="p-4 align-top text-sm text-gray-600">
-                                        <div className="line-clamp-3">
+                                        <div className="line-clamp-4 text-xs font-mono bg-gray-50 p-2 rounded">
                                             {getCurrentValue(item) || <span className="italic text-gray-400">Empty</span>}
                                         </div>
                                     </td>
                                     <td className="p-4 align-top">
-                                        {proposed ? (
-                                            <div className="bg-purple-50 border border-purple-100 p-2 rounded text-sm text-purple-900">
-                                                {proposed}
+                                        {originalProposal || displayValue ? (
+                                            <div className="relative">
+                                                <textarea
+                                                    value={displayValue}
+                                                    onChange={(e) => setEditedProposals(prev => ({...prev, [item.id]: e.target.value}))}
+                                                    className={`w-full text-sm p-2 rounded border focus:ring-2 focus:ring-purple-500 outline-none resize-y min-h-[100px]
+                                                        ${currentEdit !== undefined ? 'border-purple-300 bg-white' : 'border-purple-100 bg-purple-50 text-purple-900'}`}
+                                                />
+                                                {currentEdit !== undefined && (
+                                                     <div className="text-[10px] text-purple-600 mt-1 flex items-center gap-1">
+                                                         <PenTool size={10} /> Edited
+                                                     </div>
+                                                )}
                                             </div>
                                         ) : (
                                             <span className="text-gray-400 text-xs italic">No proposal yet</span>
@@ -389,7 +455,7 @@ const ContentEnhancer: React.FC = () => {
                                     </td>
                                     <td className="p-4 align-top text-right">
                                         <div className="flex flex-col gap-2 items-end">
-                                            {proposed ? (
+                                            {(originalProposal || currentEdit !== undefined) ? (
                                                 <>
                                                     <button
                                                         onClick={() => handleApply(item)}

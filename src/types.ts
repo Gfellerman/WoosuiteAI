@@ -1,4 +1,4 @@
-export type ViewState = 'dashboard' | 'seo' | 'security' | 'search' | 'orders' | 'email' | 'backups' | 'settings' | 'content-enhancer';
+export type ViewState = 'dashboard' | 'seo' | 'security' | 'backups' | 'settings' | 'content-enhancer';
 
 export type ContentType = 'product' | 'post' | 'page' | 'image';
 
@@ -70,15 +70,6 @@ export interface SeoGenerationResult {
   title: string;
   description: string;
   llmSummary: string;
-}
-
-export interface EmailRule {
-  id: string;
-  name: string;
-  trigger: 'order_completed' | 'order_cancelled' | 'abandoned_cart' | 'new_customer';
-  subject: string;
-  body: string;
-  active: boolean;
 }
 
 declare global {
