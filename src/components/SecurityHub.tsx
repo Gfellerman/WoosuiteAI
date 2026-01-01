@@ -25,6 +25,7 @@ const SecurityHub: React.FC = () => {
   // Deep Scan State
   const [showDeepScanModal, setShowDeepScanModal] = useState(false);
   const [deepScanStatus, setDeepScanStatus] = useState<any>(null);
+  const [selectedThreats, setSelectedThreats] = useState<string[]>([]); // For bulk actions
 
   // Quarantine & Ignore Lists
   const [quarantinedFiles, setQuarantinedFiles] = useState<any[]>([]);
@@ -301,6 +302,56 @@ const SecurityHub: React.FC = () => {
 
   const closeScanResults = () => {
       setDeepScanStatus({ ...deepScanStatus, status: 'idle' });
+      setSelectedThreats([]);
+  };
+
+  const handleBulkAction = async (action: 'ignore' | 'delete') => {
+      if (selectedThreats.length === 0) return;
+      if (!confirm(`Are you sure you want to ${action} ${selectedThreats.length} items?`)) return;
+
+      try {
+          const res = await fetch(`${apiUrl}/security/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ action, items: selectedThreats })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+              alert(`Successfully processed ${data.count} items.`);
+              // Remove processed items from view
+              if (deepScanStatus?.results) {
+                 setDeepScanStatus((prev: any) => ({
+                      ...prev,
+                      results: prev.results.filter((r: any) => !selectedThreats.includes(r.file))
+                  }));
+              }
+              setSelectedThreats([]);
+              // If ignored, refresh ignore list
+              if (action === 'ignore') fetchIgnored();
+          } else {
+              alert("Bulk action failed: " + data.message);
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Bulk action failed.");
+      }
+  };
+
+  const toggleThreatSelection = (file: string) => {
+      if (selectedThreats.includes(file)) {
+          setSelectedThreats(prev => prev.filter(f => f !== file));
+      } else {
+          setSelectedThreats(prev => [...prev, file]);
+      }
+  };
+
+  const toggleSelectAllThreats = () => {
+      if (!deepScanStatus?.results) return;
+      if (selectedThreats.length === deepScanStatus.results.length) {
+          setSelectedThreats([]);
+      } else {
+          setSelectedThreats(deepScanStatus.results.map((r: any) => r.file));
+      }
   };
 
   const handleAiAnalyze = async (filepath: string) => {
@@ -694,11 +745,37 @@ const SecurityHub: React.FC = () => {
 
                 {deepScanStatus.results && deepScanStatus.results.length > 0 && (
                     <div className="mt-6">
-                        <h4 className="font-medium text-red-600 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> Suspicious Files Found ({deepScanStatus.results.length})</h4>
+                        <div className="flex justify-between items-end mb-2">
+                             <h4 className="font-medium text-red-600 flex items-center gap-2"><AlertTriangle size={16}/> Suspicious Files Found ({deepScanStatus.results.length})</h4>
+                             {selectedThreats.length > 0 && (
+                                 <div className="flex gap-2">
+                                     <button
+                                        onClick={() => handleBulkAction('ignore')}
+                                        className="text-xs bg-white border border-gray-300 px-2 py-1 rounded text-gray-700 hover:bg-gray-50 font-medium"
+                                     >
+                                         Ignore Selected ({selectedThreats.length})
+                                     </button>
+                                     <button
+                                        onClick={() => handleBulkAction('delete')}
+                                        className="text-xs bg-red-600 text-white border border-red-600 px-2 py-1 rounded hover:bg-red-700 font-medium"
+                                     >
+                                         Delete Selected
+                                     </button>
+                                 </div>
+                             )}
+                        </div>
                         <div className="bg-red-50 border border-red-100 rounded-lg overflow-hidden max-h-96 overflow-y-auto">
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-red-100/50 text-red-800 sticky top-0">
                                     <tr>
+                                        <th className="p-3 w-8">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedThreats.length === deepScanStatus.results.length}
+                                                onChange={toggleSelectAllThreats}
+                                                className="rounded border-red-300 text-purple-600 focus:ring-purple-500"
+                                            />
+                                        </th>
                                         <th className="p-3">File</th>
                                         <th className="p-3">Issue</th>
                                         <th className="p-3 text-right">Actions</th>
@@ -707,6 +784,14 @@ const SecurityHub: React.FC = () => {
                                 <tbody className="divide-y divide-red-100">
                                     {deepScanStatus.results.map((res: any, idx: number) => (
                                         <tr key={idx} className="hover:bg-red-100/50 transition-colors">
+                                            <td className="p-3 align-top">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedThreats.includes(res.file)}
+                                                    onChange={() => toggleThreatSelection(res.file)}
+                                                    className="rounded border-red-300 text-purple-600 focus:ring-purple-500"
+                                                />
+                                            </td>
                                             <td className="p-3 font-mono text-xs text-gray-700 break-all">{res.file}</td>
                                             <td className="p-3 text-red-700 text-xs font-bold whitespace-nowrap">{res.issue}</td>
                                             <td className="p-3 flex justify-end gap-2">

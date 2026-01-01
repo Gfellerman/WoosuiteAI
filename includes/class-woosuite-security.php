@@ -31,6 +31,10 @@ class WooSuite_Security {
         if ( get_option( 'woosuite_spam_protection_enabled', 'yes' ) === 'yes' ) {
             add_filter( 'comment_form_default_fields', array( $this, 'add_honeypot_field' ) );
             add_filter( 'preprocess_comment', array( $this, 'check_spam_comment' ) );
+            // Action hook for Contact Forms (Generic) if they use 'init' or 'wp_loaded' to check POST
+            add_action( 'template_redirect', array( $this, 'check_contact_form_spam' ) );
+            // Inject honeypot into footer for generic forms (JS method)
+            add_action( 'wp_footer', array( $this, 'inject_honeypot_js' ) );
         }
     }
 
@@ -286,18 +290,47 @@ class WooSuite_Security {
         $link_count = preg_match_all( '/http(s)?:\/\//i', $content, $matches );
 
         if ( $link_count > 2 ) {
-            // Mark as spam or pending
-            // For now, we flag it as pending moderation if not already
-            // Or strictly die? User wanted "Best spam protection".
-            // Let's set it to '0' (pending) strictly, or spam.
-            // Let's just die for now as requested "not to slowdown...".
-            // Actually, "not to slowdown" -> blocking is fast.
-            // But user might want real comments with links.
-            // Better: mark as spam in DB.
             $commentdata['comment_approved'] = 'spam';
         }
 
         return $commentdata;
+    }
+
+    /**
+     * Generic Check for Contact Forms (POST requests with honeypot)
+     */
+    public function check_contact_form_spam() {
+        if ( $_SERVER['REQUEST_METHOD'] === 'POST' ) {
+            // Check if our JS injected honeypot field is filled
+            if ( isset( $_POST['woosuite_honey_js'] ) && ! empty( $_POST['woosuite_honey_js'] ) ) {
+                wp_die( 'Spam detected by WooSuite Protection.' );
+            }
+        }
+    }
+
+    /**
+     * Inject a hidden honeypot field into all forms on the page via JS.
+     * This works for CF7, WPForms, etc., as long as they are standard forms.
+     */
+    public function inject_honeypot_js() {
+        ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var forms = document.getElementsByTagName('form');
+            for (var i = 0; i < forms.length; i++) {
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.name = 'woosuite_honey_js';
+                input.style.display = 'none';
+                input.style.position = 'absolute'; // Ensure it's out of flow
+                input.style.left = '-9999px';
+                input.tabIndex = -1;
+                input.autocomplete = 'off';
+                forms[i].appendChild(input);
+            }
+        });
+        </script>
+        <?php
     }
 
     /**

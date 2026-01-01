@@ -76,8 +76,8 @@ const App: React.FC = () => {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out
-        md:relative md:translate-x-0
+        fixed inset-y-0 left-0 z-50 bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out h-full
+        md:fixed md:inset-y-0 md:left-0 md:translate-x-0
         ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full'}
         ${!isMobileMenuOpen && (isCollapsed ? 'md:w-20' : 'md:w-64')}
       `}>
@@ -124,7 +124,9 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen">
+      <main className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out
+          ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}
+      `}>
         {/* Mobile Header */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:hidden sticky top-0 z-30">
              <div className="font-bold text-gray-800">WooSuite AI</div>

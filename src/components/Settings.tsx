@@ -18,8 +18,11 @@ const Settings: React.FC = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'general' | 'logs'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'logs' | 'maintenance'>('general');
   const [copied, setCopied] = useState(false);
+
+  // Maintenance State
+  const [maintenanceLoading, setMaintenanceLoading] = useState<string | null>(null);
 
   // Logs State
   const [logs, setLogs] = useState<string[]>([]);
@@ -166,6 +169,31 @@ const Settings: React.FC = () => {
       }
   };
 
+  const handleMaintenance = async (action: string) => {
+      if (!window.woosuiteData?.apiUrl) return;
+      if (!confirm("Are you sure? This action cannot be undone.")) return;
+
+      setMaintenanceLoading(action);
+      try {
+          const res = await fetch(`${window.woosuiteData.apiUrl}/maintenance`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.woosuiteData.nonce },
+              body: JSON.stringify({ action })
+          });
+          const data = await res.json();
+          if (data.success) {
+              alert(data.message);
+          } else {
+              alert("Failed: " + data.message);
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Maintenance action failed.");
+      } finally {
+          setMaintenanceLoading(null);
+      }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
         <div className="flex justify-between items-center border-b border-gray-200 pb-6">
@@ -180,6 +208,12 @@ const Settings: React.FC = () => {
                         className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'general' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         General
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('maintenance')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'maintenance' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        Maintenance
                     </button>
                      <button
                         onClick={() => setActiveTab('logs')}
@@ -298,54 +332,6 @@ const Settings: React.FC = () => {
                             <Zap size={18} />
                             <span>Your API Key is stored securely in the database and used for all AI requests.</span>
                         </div>
-
-                        {/* Custom API / BYO-LLM Section */}
-                        <div className="border-t border-gray-100 pt-6 mt-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 className="font-semibold text-gray-800">Bring Your Own LLM</h3>
-                                    <p className="text-xs text-gray-500">Connect to Local LLMs (Ollama) or other providers (z.ai, OpenAI).</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-gray-700 cursor-pointer" htmlFor="useCustomApi">Use Custom API</label>
-                                    <input
-                                        id="useCustomApi"
-                                        type="checkbox"
-                                        checked={useCustomApi}
-                                        onChange={(e) => setUseCustomApi(e.target.checked)}
-                                        className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300"
-                                    />
-                                </div>
-                            </div>
-
-                            {useCustomApi && (
-                                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="customApiUrl">API Endpoint URL</label>
-                                        <input
-                                            id="customApiUrl"
-                                            type="text"
-                                            value={customApiUrl}
-                                            onChange={(e) => setCustomApiUrl(e.target.value)}
-                                            placeholder="https://api.openai.com/v1/chat/completions"
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none font-mono text-sm"
-                                        />
-                                        <p className="text-xs text-gray-500 mt-1">Full URL to the chat completions endpoint.</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="customModelId">Model ID</label>
-                                        <input
-                                            id="customModelId"
-                                            type="text"
-                                            value={customModelId}
-                                            onChange={(e) => setCustomModelId(e.target.value)}
-                                            placeholder="gpt-4o, llama3:latest, glm-4"
-                                            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-200 focus:border-purple-500 outline-none font-mono text-sm"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
 
@@ -368,19 +354,71 @@ const Settings: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                        <h3 className="font-semibold text-gray-800 mb-4">Maintenance</h3>
-                        <div className="space-y-3">
-                            <button className="w-full py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition text-left flex justify-between items-center">
-                                Clear System Cache <span className="text-xs text-gray-400">128 MB</span>
-                            </button>
-                            <button className="w-full py-2 px-4 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition text-left">
-                                Reset Onboarding Tour
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </>
+        ) : activeTab === 'maintenance' ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-2xl mx-auto">
+                <h3 className="font-semibold text-gray-800 mb-6 flex items-center gap-2">
+                    <AlertTriangle size={20} className="text-amber-500" /> Maintenance Tools
+                </h3>
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div>
+                            <div className="font-medium text-gray-900">Clear Transients</div>
+                            <div className="text-sm text-gray-500">Removes expired temporary data.</div>
+                        </div>
+                        <button
+                            onClick={() => handleMaintenance('clear_transients')}
+                            disabled={maintenanceLoading === 'clear_transients'}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+                        >
+                            {maintenanceLoading === 'clear_transients' ? 'Processing...' : 'Run Cleanup'}
+                        </button>
+                    </div>
+
+                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div>
+                            <div className="font-medium text-gray-900">Delete Post Revisions</div>
+                            <div className="text-sm text-gray-500">Removes old post history.</div>
+                        </div>
+                        <button
+                            onClick={() => handleMaintenance('delete_revisions')}
+                            disabled={maintenanceLoading === 'delete_revisions'}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+                        >
+                            {maintenanceLoading === 'delete_revisions' ? 'Processing...' : 'Run Cleanup'}
+                        </button>
+                    </div>
+
+                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div>
+                            <div className="font-medium text-gray-900">Delete Spam Comments</div>
+                            <div className="text-sm text-gray-500">Permanently deletes comments marked as spam.</div>
+                        </div>
+                        <button
+                            onClick={() => handleMaintenance('spam_comments')}
+                            disabled={maintenanceLoading === 'spam_comments'}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+                        >
+                            {maintenanceLoading === 'spam_comments' ? 'Processing...' : 'Run Cleanup'}
+                        </button>
+                    </div>
+
+                    <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div>
+                            <div className="font-medium text-gray-900">Optimize Database</div>
+                            <div className="text-sm text-gray-500">Defragments tables.</div>
+                        </div>
+                        <button
+                            onClick={() => handleMaintenance('optimize_db')}
+                            disabled={maintenanceLoading === 'optimize_db'}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+                        >
+                            {maintenanceLoading === 'optimize_db' ? 'Processing...' : 'Run Optimization'}
+                        </button>
+                    </div>
+                </div>
+            </div>
         ) : null}
     </div>
   );
