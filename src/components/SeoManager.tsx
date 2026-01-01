@@ -595,6 +595,10 @@ const SeoManager: React.FC = () => {
                         <option value={50}>50 per page</option>
                         <option value={100}>100 per page</option>
                         <option value={500}>500 per page</option>
+                        <option value={1000}>1,000 per page</option>
+                        <option value={3000}>3,000 per page</option>
+                        <option value={5000}>5,000 per page</option>
+                        <option value={10000}>10,000 per page</option>
                     </select>
                 </div>
                 <div className="flex items-center gap-2">

@@ -432,20 +432,20 @@ class WooSuite_Api {
         // Status Filter (Enhanced vs Not Enhanced)
         if ( $status === 'enhanced' ) {
             // "Enhanced" means the item has been modified by AI (has history) OR has a pending proposal?
-            // User requirement: "As there is a track of what has been modified in order to undo the changes..."
-            // So we check for _woosuite_history_... keys.
-            // Since there are multiple history keys (title, content, excerpt, meta...), we use OR relation.
             $meta_query[] = array(
                 'relation' => 'OR',
                 array( 'key' => '_woosuite_history_post_title', 'compare' => 'EXISTS' ),
                 array( 'key' => '_woosuite_history_post_content', 'compare' => 'EXISTS' ),
                 array( 'key' => '_woosuite_history_post_excerpt', 'compare' => 'EXISTS' ),
-                // Also check if there is a pending proposal? User might want to see items with proposals ready to review.
                 array( 'key' => '_woosuite_proposed_title', 'compare' => 'EXISTS' ),
                 array( 'key' => '_woosuite_proposed_description', 'compare' => 'EXISTS' ),
+                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'EXISTS' )
             );
         } elseif ( $status === 'not_enhanced' ) {
             // "Not Enhanced" means NO history AND NO proposals.
+            // When filtering for NOT EXISTS on multiple keys in WP_Query, using relation 'AND'
+            // works, but sometimes WP_Query optimizations or joins can be tricky with NOT EXISTS.
+            // Explicitly checking all keys.
             $meta_query[] = array(
                 'relation' => 'AND',
                 array( 'key' => '_woosuite_history_post_title', 'compare' => 'NOT EXISTS' ),
@@ -453,6 +453,7 @@ class WooSuite_Api {
                 array( 'key' => '_woosuite_history_post_excerpt', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_proposed_title', 'compare' => 'NOT EXISTS' ),
                 array( 'key' => '_woosuite_proposed_description', 'compare' => 'NOT EXISTS' ),
+                array( 'key' => '_woosuite_proposed_short_description', 'compare' => 'NOT EXISTS' )
             );
         }
 
@@ -645,64 +646,78 @@ class WooSuite_Api {
     }
 
     public function rewrite_content_item( $request ) {
-        $params = $request->get_json_params();
-        $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
-        $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
-        $tone = isset( $params['tone'] ) ? sanitize_text_field( $params['tone'] ) : 'Professional';
-        $instructions = isset( $params['instructions'] ) ? sanitize_text_field( $params['instructions'] ) : '';
+        try {
+            $params = $request->get_json_params();
+            $id = isset( $params['id'] ) ? intval( $params['id'] ) : 0;
+            $field = isset( $params['field'] ) ? sanitize_text_field( $params['field'] ) : 'description';
+            $tone = isset( $params['tone'] ) ? sanitize_text_field( $params['tone'] ) : 'Professional';
+            $instructions = isset( $params['instructions'] ) ? sanitize_text_field( $params['instructions'] ) : '';
 
-        $post = get_post( $id );
-        if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
+            $post = get_post( $id );
+            if ( ! $post ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Not found' ), 404 );
 
-        // Strict Product Only for Content Enhancer
-        if ( $post->post_type !== 'product' ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'Only products are supported for rewriting.' ), 400 );
-        }
-
-        $text = '';
-        $context = '';
-        $internal_instructions = '';
-
-        if ( $field === 'title' ) {
-            $text = $post->post_title;
-            // Use description as context so AI knows what the product is (Avoids Real Estate hallucination)
-            $context = strip_tags( $post->post_content );
-            if ( empty( $context ) ) $context = "Product: " . $post->post_title;
-            $internal_instructions = "Minimize the name to max 5 words.";
-        } elseif ( $field === 'short_description' ) {
-            $text = $post->post_excerpt;
-            $context = $post->post_title; // Name is the source
-            $internal_instructions = "Give exactly ONE word based on the name.";
-            if ( empty( $text ) ) $text = "Generate";
-        } elseif ( $field === 'description' ) {
-            $text = strip_tags( $post->post_content );
-            $internal_instructions = "Write a plain English description. Fix bad translation.";
-            // If desc is empty, use title as context to generate it
-            if ( empty( $text ) ) {
-                $text = "Generate description for: " . $post->post_title;
-                $context = $post->post_title;
+            // Strict Product Only for Content Enhancer
+            if ( $post->post_type !== 'product' ) {
+                return new WP_REST_Response( array( 'success' => false, 'message' => 'Only products are supported for rewriting.' ), 400 );
             }
+
+            $text = '';
+            $context = '';
+            $internal_instructions = '';
+
+            if ( $field === 'title' ) {
+                $text = $post->post_title;
+                // Use description as context so AI knows what the product is (Avoids Real Estate hallucination)
+                $context = strip_tags( $post->post_content );
+                if ( empty( $context ) ) $context = "Product: " . $post->post_title;
+                $internal_instructions = "Minimize the name to max 5 words.";
+            } elseif ( $field === 'short_description' ) {
+                $text = $post->post_excerpt;
+                $context = $post->post_title; // Name is the source
+                $internal_instructions = "Give exactly ONE word based on the name.";
+                if ( empty( $text ) ) $text = "Generate";
+            } elseif ( $field === 'description' ) {
+                $text = strip_tags( $post->post_content );
+                $internal_instructions = "Write a plain English description. Fix bad translation.";
+                // If desc is empty, use title as context to generate it
+                if ( empty( $text ) ) {
+                    $text = "Generate description for: " . $post->post_title;
+                    $context = $post->post_title;
+                }
+            }
+
+            // Combine instructions
+            $final_instructions = $internal_instructions;
+            if ( ! empty( $instructions ) ) {
+                $final_instructions .= " User Note: " . $instructions;
+            }
+
+            $groq = new WooSuite_Groq();
+            // Pass context to prevent hallucinations
+            $result = $groq->rewrite_content( $text, $field, $tone, $final_instructions, $context );
+
+            if ( is_wp_error( $result ) ) {
+                // Log detailed error
+                $debug_logs = get_option('woosuite_debug_log', array());
+                array_unshift($debug_logs, "[ERROR] Rewrite failed for ID $id: " . $result->get_error_message());
+                update_option('woosuite_debug_log', array_slice($debug_logs, 0, 50));
+
+                return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+            }
+
+            if ( ! empty( $result['rewritten'] ) ) {
+                update_post_meta( $id, '_woosuite_proposed_' . $field, wp_kses_post( $result['rewritten'] ) );
+            }
+
+            return new WP_REST_Response( array( 'success' => true, 'rewritten' => $result['rewritten'] ), 200 );
+
+        } catch ( Throwable $e ) {
+            $debug_logs = get_option('woosuite_debug_log', array());
+            array_unshift($debug_logs, "[CRITICAL] Rewrite Fatal Error ID $id: " . $e->getMessage());
+            update_option('woosuite_debug_log', array_slice($debug_logs, 0, 50));
+
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Server Error: ' . $e->getMessage() ), 500 );
         }
-
-        // Combine instructions
-        $final_instructions = $internal_instructions;
-        if ( ! empty( $instructions ) ) {
-            $final_instructions .= " User Note: " . $instructions;
-        }
-
-        $groq = new WooSuite_Groq();
-        // Pass context to prevent hallucinations
-        $result = $groq->rewrite_content( $text, $field, $tone, $final_instructions, $context );
-
-        if ( is_wp_error( $result ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
-        }
-
-        if ( ! empty( $result['rewritten'] ) ) {
-            update_post_meta( $id, '_woosuite_proposed_' . $field, wp_kses_post( $result['rewritten'] ) );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'rewritten' => $result['rewritten'] ), 200 );
     }
 
     public function apply_content_rewrite( $request ) {
@@ -1217,32 +1232,41 @@ class WooSuite_Api {
     }
 
     public function analyze_firewall_logs( $request ) {
-        // Fetch blocked logs from DB
-        $security = new WooSuite_Security( $this->plugin_name, $this->version );
+        try {
+            // Fetch blocked logs from DB
+            $security = new WooSuite_Security( $this->plugin_name, $this->version );
 
-        // We need a specific query for blocked requests
-        global $wpdb;
-        $table = $wpdb->prefix . 'woosuite_security_logs';
-        $logs = $wpdb->get_results( "SELECT * FROM $table WHERE blocked = 1 ORDER BY created_at DESC LIMIT 50" );
+            // We need a specific query for blocked requests
+            global $wpdb;
+            $table = $wpdb->prefix . 'woosuite_security_logs';
+            // Check if table exists
+            if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") !== $table ) {
+                 return new WP_REST_Response( array( 'success' => false, 'message' => 'Security logs table not found.' ), 400 );
+            }
 
-        if ( empty( $logs ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'No blocked requests found.' ), 400 );
+            $logs = $wpdb->get_results( "SELECT * FROM $table WHERE blocked = 1 ORDER BY created_at DESC LIMIT 50" );
+
+            if ( empty( $logs ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'message' => 'No blocked requests found.' ), 400 );
+            }
+
+            // Summarize
+            $summary = "";
+            foreach ( $logs as $l ) {
+                $summary .= "[{$l->created_at}] IP: {$l->ip_address} - {$l->event}\n";
+            }
+
+            $groq = new WooSuite_Groq();
+            $analysis = $groq->analyze_firewall_logs( $summary );
+
+            if ( is_wp_error( $analysis ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+            }
+
+            return new WP_REST_Response( array( 'success' => true, 'analysis' => $analysis ), 200 );
+        } catch ( Throwable $e ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Server Error: ' . $e->getMessage() ), 500 );
         }
-
-        // Summarize
-        $summary = "";
-        foreach ( $logs as $l ) {
-            $summary .= "[{$l->created_at}] IP: {$l->ip_address} - {$l->event}\n";
-        }
-
-        $groq = new WooSuite_Groq();
-        $analysis = $groq->analyze_firewall_logs( $summary );
-
-        if ( is_wp_error( $analysis ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'analysis' => $analysis ), 200 );
     }
 
     public function analyze_security_logs( $request ) {

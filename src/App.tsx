@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ViewState, Product, Order } from './types';
+import { ViewState, Product } from './types';
 import Dashboard from './components/Dashboard';
 import SeoManager from './components/SeoManager';
 import ContentEnhancer from './components/ContentEnhancer';
 import SecurityHub from './components/SecurityHub';
 import BackupManager from './components/BackupManager';
 import Settings from './components/Settings';
-import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X, PenTool, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Search, Shield, Database, Box, Settings as SettingsIcon, Menu, X, PenTool, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Initial Mock Data
 const initialProducts: Product[] = [];
-const initialOrders: Order[] = [];
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
@@ -40,10 +38,6 @@ const App: React.FC = () => {
 
     fetchRealData();
   }, []);
-
-  const handleUpdateProduct = (updated: Product) => {
-    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
-  };
 
   const NavItem = ({ id, label, icon: Icon }: { id: ViewState, label: string, icon: React.ElementType }) => (
     <button
@@ -77,9 +71,10 @@ const App: React.FC = () => {
       {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 bg-gray-50 border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out h-full
-        md:fixed md:inset-y-0 md:left-0 md:translate-x-0
+        md:sticky md:top-0 md:h-screen
         ${isMobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full'}
         ${!isMobileMenuOpen && (isCollapsed ? 'md:w-20' : 'md:w-64')}
+        md:translate-x-0
       `}>
         <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
            <div className="flex items-center gap-2 text-purple-700 font-bold text-xl overflow-hidden">
@@ -124,9 +119,7 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out
-          ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}
-      `}>
+      <main className="flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out overflow-hidden">
         {/* Mobile Header */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 md:hidden sticky top-0 z-30">
              <div className="font-bold text-gray-800">WooSuite AI</div>
@@ -151,7 +144,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 p-4 md:p-8">
+        <div className="flex-1 p-4 md:p-8 overflow-x-hidden">
             <div className="max-w-6xl mx-auto">
                 {view === 'dashboard' && <Dashboard />}
                 {view === 'seo' && <SeoManager />}

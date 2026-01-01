@@ -407,7 +407,7 @@ const Settings: React.FC = () => {
                     <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <div>
                             <div className="font-medium text-gray-900">Optimize Database</div>
-                            <div className="text-sm text-gray-500">Defragments tables.</div>
+                            <div className="text-sm text-gray-500">Runs <code>OPTIMIZE TABLE</code> on all site tables (Products, Posts, etc.) to reclaim space.</div>
                         </div>
                         <button
                             onClick={() => handleMaintenance('optimize_db')}
