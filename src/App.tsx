@@ -4,10 +4,7 @@ import Dashboard from './components/Dashboard';
 import SeoManager from './components/SeoManager';
 import ContentEnhancer from './components/ContentEnhancer';
 import SecurityHub from './components/SecurityHub';
-import AiSearch from './components/AiSearch';
-import OrderManager from './components/OrderManager';
 import BackupManager from './components/BackupManager';
-import EmailAutomation from './components/EmailAutomation';
 import Settings from './components/Settings';
 import { LayoutDashboard, Search, Shield, ShoppingBag, Database, Box, Mail, Settings as SettingsIcon, Beaker, Menu, X, PenTool, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -18,7 +15,6 @@ const initialOrders: Order[] = [];
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('dashboard');
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -108,9 +104,6 @@ const App: React.FC = () => {
           <NavItem id="seo" label="AI SEO (GEO)" icon={Search} />
           <NavItem id="content-enhancer" label="Content Enhancer" icon={PenTool} />
           <NavItem id="security" label="Security & Firewall" icon={Shield} />
-          <NavItem id="email" label="Email & Marketing" icon={Mail} />
-          <NavItem id="orders" label="Order Manager" icon={ShoppingBag} />
-          <NavItem id="search" label="AI Search Config" icon={Search} />
           <NavItem id="backups" label="Cloud Backups" icon={Database} />
           
           {!isCollapsed && <div className="pt-4 pb-2 px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">System</div>}
@@ -162,9 +155,6 @@ const App: React.FC = () => {
                 {view === 'seo' && <SeoManager />}
                 {view === 'content-enhancer' && <ContentEnhancer />}
                 {view === 'security' && <SecurityHub />}
-                {view === 'search' && <AiSearch products={products} />}
-                {view === 'orders' && <OrderManager orders={orders} />}
-                {view === 'email' && <EmailAutomation />}
                 {view === 'backups' && <BackupManager />}
                 {view === 'settings' && <Settings />}
             </div>
