@@ -161,6 +161,17 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/security/bulk', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'bulk_security_action' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/maintenance', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'perform_maintenance' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
 
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
@@ -875,12 +886,32 @@ class WooSuite_Api {
     }
 
     public function get_stats( $request ) {
+        global $wpdb;
+
+        // Threats Blocked: Count rows in security logs where blocked = 1
+        $table_logs = $wpdb->prefix . 'woosuite_security_logs';
+        $threats_blocked = 0;
+        // Check if table exists first
+        if ( $wpdb->get_var("SHOW TABLES LIKE '$table_logs'") === $table_logs ) {
+             $threats_blocked = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table_logs WHERE blocked = 1" );
+        }
+
+        // Last Backup
+        $last_backup = get_option( 'woosuite_last_backup_time', 'Never' );
+        // Format relative time if not "Never"
+        if ( $last_backup !== 'Never' ) {
+            $timestamp = strtotime( $last_backup );
+            if ( $timestamp ) {
+                $last_backup = human_time_diff( $timestamp, current_time( 'timestamp' ) ) . ' ago';
+            }
+        }
+
         $stats = array(
             'orders' => 0,
             'seo_score' => 0,
-            'threats_blocked' => (int) get_option( 'woosuite_threats_blocked_count', 0 ),
-            'ai_searches' => (int) get_option( 'woosuite_ai_searches_count', 0 ),
-            'last_backup' => get_option( 'woosuite_last_backup_time', 'Never' ),
+            'threats_blocked' => $threats_blocked,
+            'ai_searches' => 0, // Feature deprecated
+            'last_backup' => $last_backup,
         );
 
         if ( class_exists( 'WooCommerce' ) ) {
@@ -889,18 +920,29 @@ class WooSuite_Api {
              $stats['orders'] = array_sum($order_counts);
         }
 
-        // SEO Score (Simple logic: % of posts with meta desc)
-        $posts = get_posts(array('numberposts' => -1, 'post_type' => array('post', 'page', 'product')));
-        $total = count($posts);
-        $optimized = 0;
-        if ($total > 0) {
-            foreach ($posts as $p) {
-                // Check if our meta or Yoast/RankMath meta exists
-                if (get_post_meta($p->ID, '_woosuite_meta_description', true) || get_post_meta($p->ID, '_yoast_wpseo_metadesc', true)) {
-                    $optimized++;
-                }
-            }
-            $stats['seo_score'] = round(($optimized / $total) * 100);
+        // SEO Score: Accurate count including Images, Posts, Pages, Products
+        // We use direct SQL for performance
+        $post_types = "'post', 'page', 'product'";
+        $total_content = (int) $wpdb->get_var( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type IN ($post_types) AND post_status = 'publish'" );
+        $optimized_content = (int) $wpdb->get_var( "
+            SELECT COUNT(DISTINCT post_id) FROM $wpdb->postmeta
+            WHERE meta_key IN ('_woosuite_meta_description', '_yoast_wpseo_metadesc', 'rank_math_description')
+            AND meta_value != ''
+        " );
+
+        // Images
+        $total_images = (int) $wpdb->get_var( "SELECT COUNT(ID) FROM $wpdb->posts WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%' AND post_status = 'inherit'" );
+        $optimized_images = (int) $wpdb->get_var( "
+            SELECT COUNT(DISTINCT post_id) FROM $wpdb->postmeta
+            WHERE meta_key = '_wp_attachment_image_alt'
+            AND meta_value != ''
+        " );
+
+        $total_items = $total_content + $total_images;
+        $total_optimized = $optimized_content + $optimized_images;
+
+        if ( $total_items > 0 ) {
+            $stats['seo_score'] = round( ($total_optimized / $total_items) * 100 );
         } else {
              $stats['seo_score'] = 0;
         }
@@ -1043,6 +1085,9 @@ class WooSuite_Api {
         $path = isset( $params['path'] ) ? $params['path'] : '';
         if ( empty( $path ) ) return new WP_REST_Response( array( 'success' => false ), 400 );
 
+        // Normalize slashes
+        $path = wp_normalize_path( $path );
+
         $ignored = get_option( 'woosuite_security_ignored_paths', array() );
         if ( ! in_array( $path, $ignored ) ) {
             $ignored[] = $path;
@@ -1050,6 +1095,75 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function bulk_security_action( $request ) {
+        $params = $request->get_json_params();
+        $action = isset( $params['action'] ) ? $params['action'] : '';
+        $items = isset( $params['items'] ) ? $params['items'] : array();
+
+        if ( empty( $items ) || ! is_array( $items ) ) {
+             return new WP_REST_Response( array( 'success' => false, 'message' => 'No items selected' ), 400 );
+        }
+
+        $count = 0;
+        if ( $action === 'ignore' ) {
+             $ignored = get_option( 'woosuite_security_ignored_paths', array() );
+             foreach ( $items as $path ) {
+                 $path = wp_normalize_path( $path );
+                 if ( ! in_array( $path, $ignored ) ) {
+                     $ignored[] = $path;
+                     $count++;
+                 }
+             }
+             if ( $count > 0 ) {
+                 update_option( 'woosuite_security_ignored_paths', $ignored );
+             }
+        } elseif ( $action === 'delete' ) {
+             // CAUTION: This deletes files!
+             foreach ( $items as $path ) {
+                 $full_path = ABSPATH . $path; // Path is relative
+                 if ( file_exists( $full_path ) ) {
+                     // Check if safe
+                     if ( unlink( $full_path ) ) {
+                         $count++;
+                     }
+                 }
+             }
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'count' => $count ), 200 );
+    }
+
+    public function perform_maintenance( $request ) {
+        global $wpdb;
+        $params = $request->get_json_params();
+        $action = isset( $params['action'] ) ? $params['action'] : '';
+
+        $message = 'No action taken';
+        $freed = 0;
+
+        if ( $action === 'clear_transients' ) {
+            // Delete expired transients
+            $wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_%'" );
+            $wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_site_transient_%'" );
+            $message = 'Transients cleared.';
+        } elseif ( $action === 'delete_revisions' ) {
+            $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'revision'" );
+            $message = 'Post revisions deleted.';
+        } elseif ( $action === 'spam_comments' ) {
+            $wpdb->query( "DELETE FROM $wpdb->comments WHERE comment_approved = 'spam'" );
+            $message = 'Spam comments deleted.';
+        } elseif ( $action === 'optimize_db' ) {
+            // Basic optimization
+            $tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
+            foreach ( $tables as $table ) {
+                $wpdb->query( "OPTIMIZE TABLE {$table[0]}" );
+            }
+            $message = 'Database optimized.';
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'message' => $message ), 200 );
     }
 
     public function remove_ignored_path( $request ) {
