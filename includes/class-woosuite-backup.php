@@ -24,12 +24,7 @@ class WooSuite_Backup {
         }
 
         // Get DB Size
-        $db_size = 0;
-        $rows = $wpdb->get_results( "SHOW TABLE STATUS" );
-        foreach ( $rows as $row ) {
-            $db_size += $row->Data_length + $row->Index_length;
-        }
-        $db_size_mb = round( $db_size / 1024 / 1024, 2 );
+        $db_size_mb = $this->get_db_size_mb();
 
         return array(
             'php_version' => phpversion(),
@@ -45,44 +40,40 @@ class WooSuite_Backup {
         );
     }
 
+    private function get_db_size_mb() {
+        global $wpdb;
+        $db_size = 0;
+        $rows = $wpdb->get_results( "SHOW TABLE STATUS" );
+        foreach ( $rows as $row ) {
+            $db_size += $row->Data_length + $row->Index_length;
+        }
+        return round( $db_size / 1024 / 1024, 2 );
+    }
+
     public function export_database() {
         global $wpdb;
 
         // Prepare file
         $upload_dir = wp_upload_dir();
-        $woosuite_dir = $upload_dir['basedir'] . '/woosuite-backups';
-        if ( ! file_exists( $woosuite_dir ) ) {
-            wp_mkdir_p( $woosuite_dir );
-        }
+        $public_dir = $upload_dir['basedir'] . '/woosuite-exports-temp';
 
-        // Secure the directory
-        if ( ! file_exists( $woosuite_dir . '/index.php' ) ) {
-            file_put_contents( $woosuite_dir . '/index.php', '<?php // Silence is golden' );
-        }
-        if ( ! file_exists( $woosuite_dir . '/.htaccess' ) ) {
-            file_put_contents( $woosuite_dir . '/.htaccess', 'deny from all' );
+        if ( ! file_exists( $public_dir ) ) {
+            if ( ! wp_mkdir_p( $public_dir ) ) {
+                 $this->log_error( "Failed to create directory: $public_dir" );
+                 return false;
+            }
         }
 
         $filename = 'db-backup-' . date( 'Y-m-d-H-i-s' ) . '-' . wp_generate_password( 8, false ) . '.sql';
-        $filepath = $woosuite_dir . '/' . $filename;
-        $file_url = $upload_dir['baseurl'] . '/woosuite-backups/' . $filename; // Note: .htaccess will block this? Yes.
-        // We need to serve it securely or generate a temp accessible link.
-        // For simplicity in this context, we might rely on the user downloading via a PHP proxy or just allow it temporarily?
-        // Let's remove the .htaccess deny for the SQL file specifically or create a temp folder.
-        // Better: Use a nonce-protected download endpoint.
-        // For now, let's keep it simple: Make it accessible but with random filename.
-        // Actually, users need to download it.
-        // Let's put it in a subfolder without restriction for the session.
-
-        $public_dir = $upload_dir['basedir'] . '/woosuite-exports-temp';
-        if ( ! file_exists( $public_dir ) ) {
-            wp_mkdir_p( $public_dir );
-        }
         $filepath = $public_dir . '/' . $filename;
         $file_url = $upload_dir['baseurl'] . '/woosuite-exports-temp/' . $filename;
+        $error_log_path = $public_dir . '/error_log.txt'; // Temp error file
 
-        // Try mysqldump first (Faster)
-        if ( $this->command_exists( 'mysqldump' ) && $this->command_exists( 'gzip' ) ) {
+        $db_size_mb = $this->get_db_size_mb();
+        $is_large_db = $db_size_mb > 1000; // > 1GB
+
+        // Try mysqldump first (Faster & Safer for Large DBs)
+        if ( $this->command_exists( 'mysqldump' ) ) {
             $db_name = DB_NAME;
             $db_user = DB_USER;
             $db_pass = DB_PASSWORD;
@@ -93,30 +84,90 @@ class WooSuite_Backup {
             $host = $host_parts[0];
             $port = isset( $host_parts[1] ) ? $host_parts[1] : 3306;
 
-            $cmd = "mysqldump --host={$host} --port={$port} --user={$db_user} --password={$db_pass} --single-transaction --quick --lock-tables=false {$db_name} > {$filepath}";
+            // Secure Command Construction
+            // 2> captures stderr to a file so we can read it on failure
+            $cmd = sprintf(
+                'mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --quick --lock-tables=false %s > %s 2> %s',
+                escapeshellarg($host),
+                escapeshellarg($port),
+                escapeshellarg($db_user),
+                escapeshellarg($db_pass),
+                escapeshellarg($db_name),
+                escapeshellarg($filepath),
+                escapeshellarg($error_log_path)
+            );
 
             // Execute
             $output = null;
             $result_code = null;
             exec( $cmd, $output, $result_code );
 
-            if ( $result_code === 0 && file_exists( $filepath ) ) {
+            if ( $result_code === 0 && file_exists( $filepath ) && filesize( $filepath ) > 0 ) {
+                $this->log_info( "mysqldump successful. Size: " . filesize($filepath) );
                 return $file_url;
+            } else {
+                // Read error log
+                $error_msg = 'Unknown error';
+                if ( file_exists( $error_log_path ) ) {
+                    $error_msg = file_get_contents( $error_log_path );
+                    unlink( $error_log_path ); // Clean up
+                }
+
+                $this->log_error( "mysqldump failed (Code: $result_code). Error: $error_msg" );
+
+                // If DB is huge, do not fall back to PHP. Fail fast.
+                if ( $is_large_db ) {
+                    $this->log_error( "Database too large ({$db_size_mb}MB) for PHP fallback. Aborting." );
+                    return false; // Controller handles message
+                }
             }
+        } else {
+             $this->log_error( "mysqldump command not found." );
+             if ( $is_large_db ) {
+                 $this->log_error( "Database too large ({$db_size_mb}MB) and mysqldump missing. Aborting." );
+                 return false;
+             }
         }
 
-        // Fallback: PHP Export (Slow, but works anywhere)
-        $this->php_export( $filepath );
+        // Fallback: PHP Export (Slow, crashes on large DBs)
+        $this->log_info( "Attempting PHP fallback export..." );
+        if ( $this->php_export( $filepath ) ) {
+            return $file_url;
+        }
 
-        return $file_url;
+        return false;
+    }
+
+    private function log_error( $message ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [ERROR] [Backup] " . $message;
+        array_unshift( $logs, $entry );
+        if ( count( $logs ) > 50 ) array_pop( $logs );
+        update_option( 'woosuite_debug_log', $logs );
+    }
+
+    private function log_info( $message ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [INFO] [Backup] " . $message;
+        array_unshift( $logs, $entry );
+        if ( count( $logs ) > 50 ) array_pop( $logs );
+        update_option( 'woosuite_debug_log', $logs );
     }
 
     private function php_export( $filepath ) {
         global $wpdb;
+
+        // Increase limits for fallback
+        @ini_set( 'memory_limit', '1024M' );
+        @set_time_limit( 600 ); // 10 minutes
+
         $tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
 
         $handle = fopen( $filepath, 'w' );
-        if ( ! $handle ) return false;
+        if ( ! $handle ) {
+            $this->log_error( "Cannot write to file: $filepath" );
+            return false;
+        }
 
         foreach ( $tables as $table_row ) {
             $table = $table_row[0];
@@ -126,7 +177,6 @@ class WooSuite_Backup {
             fwrite( $handle, "\n\n" . $row[1] . ";\n\n" );
 
             // Data
-            // Chunked select to save memory
             $limit = 1000;
             $offset = 0;
 
@@ -148,41 +198,35 @@ class WooSuite_Backup {
         }
 
         fclose( $handle );
+        return true;
     }
 
     public function replace_urls( $old, $new ) {
         global $wpdb;
 
-        // Safety: Prevent empty replacement
         if ( empty( $old ) || empty( $new ) || $old === $new ) {
             return new WP_Error( 'invalid_params', 'Invalid domain parameters.' );
         }
 
         // STRATEGY 1: Use WP-CLI if available (Best for 40GB sites)
         if ( $this->command_exists( 'wp' ) ) {
-            // Run ONCE globally, not inside a table loop
-            $cmd = "wp search-replace '{$old}' '{$new}' --all-tables --skip-columns=guid --report=false";
+            $cmd = sprintf( "wp search-replace %s %s --all-tables --skip-columns=guid --report=false",
+                escapeshellarg( $old ),
+                escapeshellarg( $new )
+            );
             exec( $cmd );
-            // We can't easily get the row count from exec without parsing, so we return a success signal.
             return array( 'success' => true, 'rows_affected' => 'Processed via WP-CLI' );
         }
 
-        // STRATEGY 2: PHP Fallback (Restricted Scope for Safety)
-        // Iterating all tables on 40GB via PHP will timeout.
-        // We focus on critical tables: wp_options and wp_posts.
-
+        // STRATEGY 2: PHP Fallback
         $total_rows = 0;
 
-        // 1. Posts (SQL Replace is safe here as content/excerpt are rarely serialized with domain names)
-        // Using $wpdb->posts (might be prefixed)
-        $wpdb->query( "UPDATE $wpdb->posts SET post_content = REPLACE(post_content, '$old', '$new')" );
-        $wpdb->query( "UPDATE $wpdb->posts SET post_excerpt = REPLACE(post_excerpt, '$old', '$new')" );
-        // GUIDs should generally NOT be changed, but for migration it's often requested.
-        // We skip GUIDs to be safe by default, or only update if strictly needed.
-        // Standard practice: Do not change GUIDs.
+        // 1. Posts
+        $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_content = REPLACE(post_content, %s, %s)", $old, $new ) );
+        $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_excerpt = REPLACE(post_excerpt, %s, %s)", $old, $new ) );
 
-        // 2. Options (Must handle serialization)
-        $options = $wpdb->get_results( "SELECT option_id, option_name, option_value FROM $wpdb->options WHERE option_value LIKE '%$old%'" );
+        // 2. Options
+        $options = $wpdb->get_results( $wpdb->prepare( "SELECT option_id, option_name, option_value FROM $wpdb->options WHERE option_value LIKE %s", '%' . $wpdb->esc_like( $old ) . '%' ) );
         foreach ( $options as $opt ) {
             $val = $opt->option_value;
             if ( is_serialized( $val ) ) {

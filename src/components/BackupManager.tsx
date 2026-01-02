@@ -66,14 +66,12 @@ const BackupManager: React.FC = () => {
           const data = await res.json();
           if (res.ok && data.success) {
               setExportUrl(data.url);
-              // Move to next step only after successful export?
-              // Or user can skip to Step 3 if they already moved files.
           } else {
-              alert("Export failed: " + data.message);
+              alert("Export failed: " + (data.message || "Unknown error"));
           }
       } catch (e) {
           console.error(e);
-          alert("Export request failed.");
+          alert("Export request failed. Check 'System Logs' in settings for details.");
       } finally {
           setExporting(false);
       }
