@@ -186,6 +186,12 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        register_rest_route( $this->namespace, '/backup/export/status', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_export_status_route' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         register_rest_route( $this->namespace, '/backup/replace', array(
             'methods' => 'POST',
             'callback' => array( $this, 'run_url_replace' ),
@@ -1172,21 +1178,27 @@ class WooSuite_Api {
     }
 
     public function export_database_route( $request ) {
-        // Prevent timeouts for large exports
-        @set_time_limit( 0 );
-        @ignore_user_abort( true );
-
         if ( ! class_exists( 'WooSuite_Backup' ) ) {
             require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
         }
         $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
-        $url = $backup->export_database();
+        $result = $backup->start_export_process();
 
-        if ( ! $url ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'Export failed.' ), 500 );
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
         }
 
-        return new WP_REST_Response( array( 'success' => true, 'url' => $url ), 200 );
+        return new WP_REST_Response( array( 'success' => true, 'message' => 'Export started in background.' ), 200 );
+    }
+
+    public function get_export_status_route( $request ) {
+        if ( ! class_exists( 'WooSuite_Backup' ) ) {
+            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+        }
+        $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
+        $status = $backup->get_export_status();
+
+        return new WP_REST_Response( $status, 200 );
     }
 
     public function run_url_replace( $request ) {
