@@ -173,6 +173,25 @@ class WooSuite_Api {
             'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
+        // Backup & Migration Routes
+        register_rest_route( $this->namespace, '/backup/analyze', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'analyze_migration' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/backup/export', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'export_database_route' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
+        register_rest_route( $this->namespace, '/backup/replace', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'run_url_replace' ),
+            'permission_callback' => array( $this, 'check_permission' ),
+        ) );
+
         // SEO Batch Routes
         register_rest_route( $this->namespace, '/seo/batch', array(
             'methods' => 'POST',
@@ -1148,6 +1167,59 @@ class WooSuite_Api {
         }
 
         return new WP_REST_Response( array( 'success' => true, 'count' => $count ), 200 );
+    }
+
+    public function analyze_migration( $request ) {
+        if ( ! class_exists( 'WooSuite_Backup' ) ) {
+            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+        }
+        $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
+        $report = $backup->get_system_report();
+
+        $groq = new WooSuite_Groq();
+        $analysis = $groq->analyze_migration_readiness( $report );
+
+        if ( is_wp_error( $analysis ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( $analysis, 200 );
+    }
+
+    public function export_database_route( $request ) {
+        if ( ! class_exists( 'WooSuite_Backup' ) ) {
+            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+        }
+        $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
+        $url = $backup->export_database();
+
+        if ( ! $url ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Export failed.' ), 500 );
+        }
+
+        return new WP_REST_Response( array( 'success' => true, 'url' => $url ), 200 );
+    }
+
+    public function run_url_replace( $request ) {
+        $params = $request->get_json_params();
+        $old = isset( $params['old_domain'] ) ? sanitize_text_field( $params['old_domain'] ) : '';
+        $new = isset( $params['new_domain'] ) ? sanitize_text_field( $params['new_domain'] ) : '';
+
+        if ( empty( $old ) || empty( $new ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Missing domains.' ), 400 );
+        }
+
+        if ( ! class_exists( 'WooSuite_Backup' ) ) {
+            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+        }
+        $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
+        $result = $backup->replace_urls( $old, $new );
+
+        if ( is_wp_error( $result ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
+        }
+
+        return new WP_REST_Response( $result, 200 );
     }
 
     public function perform_maintenance( $request ) {

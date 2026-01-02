@@ -137,6 +137,50 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function analyze_migration_readiness( $system_report ) {
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $report_json = json_encode( $system_report );
+
+        $prompt = "
+            You are a Senior WordPress DevOps Engineer. Analyze this System Report for a site migration (40GB data).
+
+            System Report:
+            $report_json
+
+            Task:
+            1. Identify potential risks (e.g., Low PHP memory, specific plugins like Caching/Security that might break migration).
+            2. Assign a 'Risk Level' (Low, Medium, High).
+            3. Provide 3 specific recommendations for the user before they export the database.
+
+            Output strictly JSON:
+            {
+                \"risk\": \"Low\" | \"Medium\" | \"High\",
+                \"summary\": \"Concise executive summary of readiness (max 50 words).\",
+                \"recommendations\": [\"Tip 1\", \"Tip 2\", \"Tip 3\"]
+            }
+        ";
+
+        $body = array(
+            'model' => $this->get_model( self::MODEL_MAIN ),
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a DevOps expert. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function analyze_firewall_logs( $logs_summary ) {
         if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
