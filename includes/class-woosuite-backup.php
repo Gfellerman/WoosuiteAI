@@ -60,6 +60,20 @@ class WooSuite_Backup {
         return round( $db_size / 1024 / 1024, 2 );
     }
 
+    public function get_tables() {
+        global $wpdb;
+        $tables = array();
+        $rows = $wpdb->get_results( "SHOW TABLE STATUS" );
+        foreach ( $rows as $row ) {
+            $tables[] = array(
+                'name' => $row->Name,
+                'rows' => (int) $row->Rows,
+                'size_mb' => round( ($row->Data_length + $row->Index_length) / 1024 / 1024, 2 )
+            );
+        }
+        return $tables;
+    }
+
     public function start_export_process() {
         $db_size_mb = $this->get_db_size_mb();
         $free_space_bytes = disk_free_space( $this->base_dir );
@@ -93,7 +107,6 @@ class WooSuite_Backup {
             $port = isset( $host_parts[1] ) ? $host_parts[1] : 3306;
 
             // Background Command
-            // nohup sh -c "mysqldump ... > file.sql 2> error.log && echo 1 > done.flag" > /dev/null 2>&1 &
             $cmd = sprintf(
                 'nohup sh -c "mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --quick --lock-tables=false %s > %s 2> %s && echo 1 > %s" > /dev/null 2>&1 &',
                 escapeshellarg($host),
@@ -108,10 +121,99 @@ class WooSuite_Backup {
 
             exec( $cmd );
             $this->log_info( "Started background export: $filename" );
-            return true;
+            return true; // Implies method: 'mysqldump' (default in frontend)
         } else {
-             return new WP_Error( 'missing_tool', 'mysqldump not found. Cannot export large database.' );
+             // Fallback: Create file with header
+             $header = "-- WooSuite SQL Dump\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- PHP Fallback Mode\n\nSET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\nSET time_zone = \"+00:00\";\n\n";
+             file_put_contents( $filepath, $header );
+
+             // Return special object to trigger PHP Chunked Mode in Frontend
+             return array( 'method' => 'php_chunked', 'filename' => $filename );
         }
+    }
+
+    public function export_table_chunk( $table, $offset, $limit ) {
+        global $wpdb;
+
+        $filename = get_option( 'woosuite_export_filename' );
+        if ( ! $filename ) return new WP_Error( 'no_file', 'No export session active.' );
+
+        $filepath = $this->base_dir . '/' . $filename;
+        if ( ! file_exists( $filepath ) ) return new WP_Error( 'file_missing', 'Export file missing.' );
+
+        // Sanitize table name (Critical)
+        $tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
+        $valid_tables = array_map( function($t) { return $t[0]; }, $tables );
+        if ( ! in_array( $table, $valid_tables ) ) {
+            return new WP_Error( 'invalid_table', 'Invalid table name.' );
+        }
+
+        $buffer = "";
+
+        // 1. Structure (Only on first chunk)
+        if ( $offset == 0 ) {
+            $buffer .= "\n-- Structure for table `$table`\n";
+            $buffer .= "DROP TABLE IF EXISTS `$table`;\n";
+            $create_table = $wpdb->get_row( "SHOW CREATE TABLE `$table`", ARRAY_N );
+            $buffer .= $create_table[1] . ";\n\n";
+            $buffer .= "-- Data for table `$table`\n";
+            // Disable keys for faster insert
+            $buffer .= "/*!40000 ALTER TABLE `$table` DISABLE KEYS */;\n";
+        }
+
+        // 2. Data
+        // Use unbuffered query for memory efficiency
+        $rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM `$table` LIMIT %d, %d", $offset, $limit ), ARRAY_N );
+
+        if ( ! empty( $rows ) ) {
+            $buffer .= "INSERT INTO `$table` VALUES ";
+            $entries = array();
+            foreach ( $rows as $row ) {
+                $values = array();
+                foreach ( $row as $value ) {
+                    if ( $value === null ) {
+                        $values[] = "NULL";
+                    } else {
+                        // Escape special chars
+                        $value = $wpdb->_real_escape( $value );
+                        $values[] = "'" . $value . "'";
+                    }
+                }
+                $entries[] = "(" . implode( ',', $values ) . ")";
+            }
+            $buffer .= implode( ',', $entries ) . ";\n";
+        }
+
+        // 3. Footer (Only on last chunk?)
+        // We can't easily know if it's the last chunk here without counting.
+        // Frontend knows. But SQL requires ENABLE KEYS after inserts.
+        // It's safer to ENABLE KEYS after every chunk? No, expensive.
+        // Better: We append ENABLE KEYS only if we returned fewer rows than limit?
+        if ( count( $rows ) < $limit ) {
+             $buffer .= "/*!40000 ALTER TABLE `$table` ENABLE KEYS */;\n";
+        }
+
+        // Write to file (Append)
+        // Locking to prevent race conditions (though requests should be sequential)
+        file_put_contents( $filepath, $buffer, FILE_APPEND | LOCK_EX );
+
+        return array( 'count' => count( $rows ) );
+    }
+
+    public function finalize_export() {
+         $filename = get_option( 'woosuite_export_filename' );
+         if ( ! $filename ) return;
+
+         $filepath = $this->base_dir . '/' . $filename;
+         $done_flag = $this->base_dir . '/done.flag';
+
+         // Mark complete
+         file_put_contents( $done_flag, '1' );
+
+         return array(
+             'url' => $this->base_url . '/' . $filename,
+             'size' => $this->format_size( filesize( $filepath ) )
+         );
     }
 
     public function get_export_status() {
@@ -164,7 +266,7 @@ class WooSuite_Backup {
             return new WP_Error( 'invalid_params', 'Invalid domain parameters.' );
         }
 
-        // STRATEGY 1: Use WP-CLI if available (Best for 40GB sites)
+        // 1. WP-CLI
         if ( $this->command_exists( 'wp' ) ) {
             $cmd = sprintf( "wp search-replace %s %s --all-tables --skip-columns=guid --report=false",
                 escapeshellarg( $old ),
@@ -174,30 +276,74 @@ class WooSuite_Backup {
             return array( 'success' => true, 'rows_affected' => 'Processed via WP-CLI' );
         }
 
-        // STRATEGY 2: PHP Fallback
-        $total_rows = 0;
+        // 2. PHP Recursive (Full Site)
+        $total_affected = 0;
+        $tables = $wpdb->get_col( "SHOW TABLES" );
 
-        // 1. Posts
-        $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_content = REPLACE(post_content, %s, %s)", $old, $new ) );
-        $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_excerpt = REPLACE(post_excerpt, %s, %s)", $old, $new ) );
+        foreach ( $tables as $table ) {
+            // Skip logs or huge non-content tables if needed? No, user wants full migration.
 
-        // 2. Options
-        $options = $wpdb->get_results( $wpdb->prepare( "SELECT option_id, option_name, option_value FROM $wpdb->options WHERE option_value LIKE %s", '%' . $wpdb->esc_like( $old ) . '%' ) );
-        foreach ( $options as $opt ) {
-            $val = $opt->option_value;
-            if ( is_serialized( $val ) ) {
-                $unserialized = maybe_unserialize( $val );
-                $fixed = $this->recursive_replace( $unserialized, $old, $new );
-                $final = maybe_serialize( $fixed );
-                $wpdb->update( $wpdb->options, array( 'option_value' => $final ), array( 'option_id' => $opt->option_id ) );
-            } else {
-                $fixed = str_replace( $old, $new, $val );
-                $wpdb->update( $wpdb->options, array( 'option_value' => $fixed ), array( 'option_id' => $opt->option_id ) );
+            // Get columns
+            $columns = $wpdb->get_results( "SHOW COLUMNS FROM `$table`" );
+            $pk = null;
+            $text_cols = array();
+
+            foreach ( $columns as $col ) {
+                if ( $col->Key === 'PRI' ) $pk = $col->Field;
+                // Check for text types: varchar, text, longtext, mediumtext
+                if ( preg_match( '/(char|text|blob)/i', $col->Type ) ) {
+                    $text_cols[] = $col->Field;
+                }
             }
-            $total_rows++;
+
+            if ( ! $pk || empty( $text_cols ) ) continue;
+
+            // Process table in chunks to avoid memory issues
+            $offset = 0;
+            $limit = 1000;
+
+            while ( true ) {
+                $rows = $wpdb->get_results( "SELECT `$pk`, `" . implode( "`, `", $text_cols ) . "` FROM `$table` LIMIT $offset, $limit", ARRAY_A );
+                if ( empty( $rows ) ) break;
+
+                foreach ( $rows as $row ) {
+                    $id = $row[$pk];
+                    $update_data = array();
+                    $changed = false;
+
+                    foreach ( $text_cols as $col ) {
+                        $val = $row[$col];
+                        if ( empty( $val ) ) continue;
+
+                        $fixed = $val;
+                        if ( is_serialized( $val ) ) {
+                            $unserialized = @unserialize( $val );
+                            if ( $unserialized !== false || $val === 'b:0;' ) {
+                                $fixed_data = $this->recursive_replace( $unserialized, $old, $new );
+                                $fixed = serialize( $fixed_data );
+                            }
+                        } else {
+                            $fixed = str_replace( $old, $new, $val );
+                        }
+
+                        if ( $fixed !== $val ) {
+                            $update_data[$col] = $fixed;
+                            $changed = true;
+                        }
+                    }
+
+                    if ( $changed ) {
+                        $wpdb->update( $table, $update_data, array( $pk => $id ) );
+                        $total_affected++;
+                    }
+                }
+
+                $offset += $limit;
+                // Safety brake? No, let it run.
+            }
         }
 
-        return array( 'success' => true, 'rows_affected' => $total_rows . ' (Critical Tables Only)' );
+        return array( 'success' => true, 'rows_affected' => $total_affected . ' (All Tables)' );
     }
 
     private function recursive_replace( $data, $old, $new ) {
@@ -209,7 +355,10 @@ class WooSuite_Backup {
             }
             return $data;
         } elseif ( is_object( $data ) ) {
-            foreach ( $data as $key => $value ) {
+            if ( $data instanceof __PHP_Incomplete_Class ) return $data; // Skip broken objects
+            // Handle standard objects
+            $vars = get_object_vars( $data );
+            foreach ( $vars as $key => $value ) {
                 $data->$key = $this->recursive_replace( $value, $old, $new );
             }
             return $data;
@@ -219,6 +368,9 @@ class WooSuite_Backup {
 
     private function command_exists( $cmd ) {
         if ( ! function_exists( 'shell_exec' ) ) return false;
+        // Check open_basedir
+        if ( ini_get( 'open_basedir' ) ) return false; // Likely cannot execute global binaries
+
         $return = shell_exec( sprintf( "which %s", escapeshellarg( $cmd ) ) );
         return ! empty( $return );
     }

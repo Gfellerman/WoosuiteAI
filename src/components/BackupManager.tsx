@@ -14,6 +14,7 @@ const BackupManager: React.FC = () => {
   const [analysisReport, setAnalysisReport] = useState<any>(null);
 
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<string>('');
   const [exportUrl, setExportUrl] = useState<string | null>(null);
 
   const [oldDomain, setOldDomain] = useState('');
@@ -39,12 +40,13 @@ const BackupManager: React.FC = () => {
       try {
           const res = await fetch(`${apiUrl}/backup/analyze`, {
               method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({ old_domain: oldDomain, new_domain: newDomain })
           });
           const data = await res.json();
           if (res.ok) {
               setAnalysisReport(data);
-              setMigrationStep(2);
+              // setMigrationStep(2); // Let user read report first
           } else {
               alert("Analysis failed: " + data.message);
           }
@@ -56,8 +58,84 @@ const BackupManager: React.FC = () => {
       }
   };
 
+  const handleChunkedExport = async () => {
+      try {
+          // 1. Get Tables
+          setExportProgress("Fetching table list...");
+          const tablesRes = await fetch(`${apiUrl}/backup/tables`, {
+              headers: { 'X-WP-Nonce': nonce }
+          });
+          const tablesData = await tablesRes.json();
+
+          if ( !tablesData.tables ) throw new Error("Could not fetch tables.");
+
+          const tables: {name: string, rows: number}[] = tablesData.tables;
+          let totalRows = tables.reduce((acc, t) => acc + t.rows, 0);
+          let exportedRows = 0;
+
+          // 2. Iterate and Chunk
+          for (const table of tables) {
+              const limit = 1000;
+              let offset = 0;
+
+              // If table empty, might still need structure, but loop condition handles rows > 0.
+              // We need at least one call for structure if rows == 0?
+              // Our backend logic handles structure on offset 0.
+              // If rows is 0, we still need to call once with limit 0? Or backend handles it?
+              // Let's call at least once.
+
+              let hasMore = true;
+              while (hasMore) {
+                  // Update UI
+                  setExportProgress(`Exporting ${table.name} (${offset}/${table.rows})...`);
+
+                  const chunkRes = await fetch(`${apiUrl}/backup/export/chunk`, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+                       body: JSON.stringify({ table: table.name, offset: offset, limit: limit })
+                  });
+
+                  if (!chunkRes.ok) {
+                      const err = await chunkRes.json();
+                      throw new Error(err.message || "Chunk failed");
+                  }
+
+                  const chunkData = await chunkRes.json();
+                  const count = chunkData.count;
+
+                  exportedRows += count;
+                  offset += count;
+
+                  if (count < limit) hasMore = false;
+
+                  // Small delay to prevent server overload
+                  await new Promise(r => setTimeout(r, 100));
+              }
+          }
+
+          // 3. Finalize
+          setExportProgress("Finalizing export file...");
+          const finRes = await fetch(`${apiUrl}/backup/export/finalize`, {
+               method: 'POST',
+               headers: { 'X-WP-Nonce': nonce }
+          });
+          const finData = await finRes.json();
+
+          setExportUrl(finData.result.url);
+          setExporting(false);
+          setExportProgress('');
+
+      } catch (e: any) {
+          console.error(e);
+          alert("Export Error: " + e.message);
+          setExporting(false);
+          setExportProgress('');
+      }
+  };
+
   const handleExportDB = async () => {
       setExporting(true);
+      setExportProgress('Initializing...');
       try {
           // 1. Start Process
           const res = await fetch(`${apiUrl}/backup/export`, {
@@ -66,13 +144,20 @@ const BackupManager: React.FC = () => {
           });
           const data = await res.json();
 
-          if (!res.ok || !data.success) {
+          if (!res.ok) {
               alert("Start failed: " + (data.message || "Unknown error"));
               setExporting(false);
               return;
           }
 
-          // 2. Poll Status
+          // CHECK FOR PHP FALLBACK SIGNAL
+          if (data.method === 'php_chunked') {
+              // Switch to Chunked Export Mode
+              await handleChunkedExport();
+              return;
+          }
+
+          // 2. Standard Polling (mysqldump)
           const pollInterval = setInterval(async () => {
               try {
                   const statusRes = await fetch(`${apiUrl}/backup/export/status`, {
@@ -182,6 +267,31 @@ const BackupManager: React.FC = () => {
                               Before moving your 40GB site, let our AI analyze your system, PHP version, and plugins to ensure the destination server is compatible.
                           </p>
 
+                          {/* Domain Inputs for AI Context */}
+                          <div className="grid grid-cols-2 gap-4 mb-6 text-left max-w-md mx-auto">
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Domain (Test)</label>
+                                  <input
+                                    type="text"
+                                    value={oldDomain}
+                                    onChange={e => setOldDomain(e.target.value)}
+                                    placeholder="test.site.com"
+                                    className="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50"
+                                    readOnly
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Domain (Live)</label>
+                                  <input
+                                    type="text"
+                                    value={newDomain}
+                                    onChange={e => setNewDomain(e.target.value)}
+                                    placeholder="livesite.com"
+                                    className="w-full p-2 border border-gray-300 rounded text-sm focus:border-purple-500 outline-none"
+                                  />
+                              </div>
+                          </div>
+
                           {!analysisReport ? (
                               <button
                                 onClick={handleAnalyze}
@@ -245,14 +355,21 @@ const BackupManager: React.FC = () => {
                                </p>
 
                                {!exportUrl ? (
-                                   <button
-                                     onClick={handleExportDB}
-                                     disabled={exporting}
-                                     className="w-full bg-gray-800 text-white py-4 rounded-xl font-bold hover:bg-gray-900 transition flex items-center justify-center gap-2"
-                                   >
-                                       {exporting ? <Loader className="animate-spin" /> : <Download size={20} />}
-                                       {exporting ? 'Exporting Database...' : 'Generate SQL Dump'}
-                                   </button>
+                                   <div className="space-y-4">
+                                       <button
+                                         onClick={handleExportDB}
+                                         disabled={exporting}
+                                         className="w-full bg-gray-800 text-white py-4 rounded-xl font-bold hover:bg-gray-900 transition flex items-center justify-center gap-2"
+                                       >
+                                           {exporting ? <Loader className="animate-spin" /> : <Download size={20} />}
+                                           {exporting ? (exportProgress || 'Exporting Database...') : 'Generate SQL Dump'}
+                                       </button>
+                                       {exporting && (
+                                           <div className="text-xs text-center text-gray-500 animate-pulse">
+                                               Processing large database in chunks... Please do not close this tab.
+                                           </div>
+                                       )}
+                                   </div>
                                ) : (
                                    <div className="bg-green-50 p-6 rounded-xl border border-green-200 text-center">
                                        <CheckCircle size={40} className="text-green-500 mx-auto mb-2" />
