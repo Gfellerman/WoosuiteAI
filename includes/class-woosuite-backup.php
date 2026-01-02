@@ -4,10 +4,20 @@ class WooSuite_Backup {
 
     private $plugin_name;
     private $version;
+    private $base_dir;
+    private $base_url;
 
     public function __construct( $plugin_name, $version ) {
         $this->plugin_name = $plugin_name;
         $this->version = $version;
+
+        $upload_dir = wp_upload_dir();
+        $this->base_dir = $upload_dir['basedir'] . '/woosuite-exports-temp';
+        $this->base_url = $upload_dir['baseurl'] . '/woosuite-exports-temp';
+
+        if ( ! file_exists( $this->base_dir ) ) {
+            wp_mkdir_p( $this->base_dir );
+        }
     }
 
     public function get_system_report() {
@@ -50,157 +60,101 @@ class WooSuite_Backup {
         return round( $db_size / 1024 / 1024, 2 );
     }
 
-    public function export_database() {
-        global $wpdb;
+    public function start_export_process() {
+        $db_size_mb = $this->get_db_size_mb();
+        $free_space_bytes = disk_free_space( $this->base_dir );
+        $free_space_mb = $free_space_bytes ? round( $free_space_bytes / 1024 / 1024, 2 ) : 0;
 
-        $this->log_info( "Starting export process..." );
-
-        // Prepare file
-        $upload_dir = wp_upload_dir();
-        $public_dir = $upload_dir['basedir'] . '/woosuite-exports-temp';
-
-        if ( ! file_exists( $public_dir ) ) {
-            if ( ! wp_mkdir_p( $public_dir ) ) {
-                 $this->log_error( "Failed to create directory: $public_dir" );
-                 return false;
-            }
+        // Safety margin: 1.1x DB size
+        if ( $free_space_mb < ( $db_size_mb * 1.1 ) ) {
+            return new WP_Error( 'disk_space', "Insufficient disk space. Need approx " . ($db_size_mb * 1.1) . "MB, found {$free_space_mb}MB." );
         }
 
+        // Clear previous files
+        $this->cleanup_temp_files();
+
         $filename = 'db-backup-' . date( 'Y-m-d-H-i-s' ) . '-' . wp_generate_password( 8, false ) . '.sql';
-        $filepath = $public_dir . '/' . $filename;
-        $file_url = $upload_dir['baseurl'] . '/woosuite-exports-temp/' . $filename;
-        $error_log_path = $public_dir . '/error_log.txt'; // Temp error file
+        $filepath = $this->base_dir . '/' . $filename;
+        $error_log = $this->base_dir . '/error.log';
+        $done_flag = $this->base_dir . '/done.flag';
 
-        $db_size_mb = $this->get_db_size_mb();
-        $is_large_db = $db_size_mb > 1000; // > 1GB
+        // Save filename to retrieve later
+        update_option( 'woosuite_export_filename', $filename );
 
-        // Try mysqldump first (Faster & Safer for Large DBs)
         if ( $this->command_exists( 'mysqldump' ) ) {
             $db_name = DB_NAME;
             $db_user = DB_USER;
             $db_pass = DB_PASSWORD;
             $db_host = DB_HOST;
 
-            // Handle port in host
+            // Handle port
             $host_parts = explode( ':', $db_host );
             $host = $host_parts[0];
             $port = isset( $host_parts[1] ) ? $host_parts[1] : 3306;
 
-            // Secure Command Construction
-            // 2> captures stderr to a file so we can read it on failure
+            // Background Command
+            // nohup sh -c "mysqldump ... > file.sql 2> error.log && echo 1 > done.flag" > /dev/null 2>&1 &
             $cmd = sprintf(
-                'mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --quick --lock-tables=false %s > %s 2> %s',
+                'nohup sh -c "mysqldump --host=%s --port=%s --user=%s --password=%s --single-transaction --quick --lock-tables=false %s > %s 2> %s && echo 1 > %s" > /dev/null 2>&1 &',
                 escapeshellarg($host),
                 escapeshellarg($port),
                 escapeshellarg($db_user),
                 escapeshellarg($db_pass),
                 escapeshellarg($db_name),
                 escapeshellarg($filepath),
-                escapeshellarg($error_log_path)
+                escapeshellarg($error_log),
+                escapeshellarg($done_flag)
             );
 
-            // Execute
-            $output = null;
-            $result_code = null;
-            exec( $cmd, $output, $result_code );
-
-            if ( $result_code === 0 && file_exists( $filepath ) && filesize( $filepath ) > 0 ) {
-                $this->log_info( "mysqldump successful. Size: " . filesize($filepath) );
-                return $file_url;
-            } else {
-                // Read error log
-                $error_msg = 'Unknown error';
-                if ( file_exists( $error_log_path ) ) {
-                    $error_msg = file_get_contents( $error_log_path );
-                    unlink( $error_log_path ); // Clean up
-                }
-
-                $this->log_error( "mysqldump failed (Code: $result_code). Error: $error_msg" );
-
-                // If DB is huge, do not fall back to PHP. Fail fast.
-                if ( $is_large_db ) {
-                    $this->log_error( "Database too large ({$db_size_mb}MB) for PHP fallback. Aborting." );
-                    return false; // Controller handles message
-                }
-            }
+            exec( $cmd );
+            $this->log_info( "Started background export: $filename" );
+            return true;
         } else {
-             $this->log_error( "mysqldump command not found." );
-             if ( $is_large_db ) {
-                 $this->log_error( "Database too large ({$db_size_mb}MB) and mysqldump missing. Aborting." );
-                 return false;
-             }
+             return new WP_Error( 'missing_tool', 'mysqldump not found. Cannot export large database.' );
         }
-
-        // Fallback: PHP Export (Slow, crashes on large DBs)
-        $this->log_info( "Attempting PHP fallback export..." );
-        if ( $this->php_export( $filepath ) ) {
-            return $file_url;
-        }
-
-        return false;
     }
 
-    private function log_error( $message ) {
-        $logs = get_option( 'woosuite_debug_log', array() );
-        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [ERROR] [Backup] " . $message;
-        array_unshift( $logs, $entry );
-        if ( count( $logs ) > 50 ) array_pop( $logs );
-        update_option( 'woosuite_debug_log', $logs );
-    }
+    public function get_export_status() {
+        $filename = get_option( 'woosuite_export_filename' );
+        if ( ! $filename ) return array( 'status' => 'idle' );
 
-    private function log_info( $message ) {
-        $logs = get_option( 'woosuite_debug_log', array() );
-        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [INFO] [Backup] " . $message;
-        array_unshift( $logs, $entry );
-        if ( count( $logs ) > 50 ) array_pop( $logs );
-        update_option( 'woosuite_debug_log', $logs );
-    }
+        $filepath = $this->base_dir . '/' . $filename;
+        $done_flag = $this->base_dir . '/done.flag';
+        $error_log = $this->base_dir . '/error.log';
 
-    private function php_export( $filepath ) {
-        global $wpdb;
-
-        // Increase limits for fallback
-        @ini_set( 'memory_limit', '1024M' );
-        @set_time_limit( 600 ); // 10 minutes
-
-        $tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
-
-        $handle = fopen( $filepath, 'w' );
-        if ( ! $handle ) {
-            $this->log_error( "Cannot write to file: $filepath" );
-            return false;
+        if ( file_exists( $done_flag ) ) {
+            return array(
+                'status' => 'complete',
+                'url' => $this->base_url . '/' . $filename,
+                'size' => $this->format_size( filesize( $filepath ) )
+            );
         }
 
-        foreach ( $tables as $table_row ) {
-            $table = $table_row[0];
-
-            // Structure
-            $row = $wpdb->get_row( "SHOW CREATE TABLE {$table}", ARRAY_N );
-            fwrite( $handle, "\n\n" . $row[1] . ";\n\n" );
-
-            // Data
-            $limit = 1000;
-            $offset = 0;
-
-            do {
-                $rows = $wpdb->get_results( "SELECT * FROM {$table} LIMIT {$limit} OFFSET {$offset}", ARRAY_A );
-                if ( $rows ) {
-                    foreach ( $rows as $row ) {
-                        $values = array();
-                        foreach ( $row as $value ) {
-                            $value = addslashes( $value );
-                            $value = str_replace( "\n", "\\n", $value );
-                            $values[] = '"' . $value . '"';
-                        }
-                        fwrite( $handle, "INSERT INTO {$table} VALUES (" . implode( ',', $values ) . ");\n" );
-                    }
-                }
-                $offset += $limit;
-            } while ( count( $rows ) == $limit );
+        if ( file_exists( $error_log ) && filesize( $error_log ) > 0 ) {
+            $error_msg = file_get_contents( $error_log );
+            return array( 'status' => 'failed', 'message' => $error_msg );
         }
 
-        fclose( $handle );
-        return true;
+        if ( file_exists( $filepath ) ) {
+            return array(
+                'status' => 'processing',
+                'size' => $this->format_size( filesize( $filepath ) )
+            );
+        }
+
+        return array( 'status' => 'starting' );
+    }
+
+    private function cleanup_temp_files() {
+        array_map( 'unlink', glob( $this->base_dir . '/*.sql' ) );
+        array_map( 'unlink', glob( $this->base_dir . '/*.flag' ) );
+        array_map( 'unlink', glob( $this->base_dir . '/*.log' ) );
+    }
+
+    private function format_size( $bytes ) {
+        if ( $bytes >= 1073741824 ) return number_format( $bytes / 1073741824, 2 ) . ' GB';
+        if ( $bytes >= 1048576 ) return number_format( $bytes / 1048576, 2 ) . ' MB';
+        return number_format( $bytes / 1024, 2 ) . ' KB';
     }
 
     public function replace_urls( $old, $new ) {
@@ -264,7 +218,24 @@ class WooSuite_Backup {
     }
 
     private function command_exists( $cmd ) {
+        if ( ! function_exists( 'shell_exec' ) ) return false;
         $return = shell_exec( sprintf( "which %s", escapeshellarg( $cmd ) ) );
         return ! empty( $return );
+    }
+
+    private function log_info( $message ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [INFO] [Backup] " . $message;
+        array_unshift( $logs, $entry );
+        if ( count( $logs ) > 50 ) array_pop( $logs );
+        update_option( 'woosuite_debug_log', $logs );
+    }
+
+    private function log_error( $message ) {
+        $logs = get_option( 'woosuite_debug_log', array() );
+        $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [ERROR] [Backup] " . $message;
+        array_unshift( $logs, $entry );
+        if ( count( $logs ) > 50 ) array_pop( $logs );
+        update_option( 'woosuite_debug_log', $logs );
     }
 }

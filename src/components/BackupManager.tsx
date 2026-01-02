@@ -59,20 +59,45 @@ const BackupManager: React.FC = () => {
   const handleExportDB = async () => {
       setExporting(true);
       try {
+          // 1. Start Process
           const res = await fetch(`${apiUrl}/backup/export`, {
               method: 'POST',
               headers: { 'X-WP-Nonce': nonce }
           });
           const data = await res.json();
-          if (res.ok && data.success) {
-              setExportUrl(data.url);
-          } else {
-              alert("Export failed: " + (data.message || "Unknown error"));
+
+          if (!res.ok || !data.success) {
+              alert("Start failed: " + (data.message || "Unknown error"));
+              setExporting(false);
+              return;
           }
+
+          // 2. Poll Status
+          const pollInterval = setInterval(async () => {
+              try {
+                  const statusRes = await fetch(`${apiUrl}/backup/export/status`, {
+                      headers: { 'X-WP-Nonce': nonce }
+                  });
+                  const statusData = await statusRes.json();
+
+                  if (statusData.status === 'complete') {
+                      clearInterval(pollInterval);
+                      setExportUrl(statusData.url);
+                      setExporting(false);
+                  } else if (statusData.status === 'failed') {
+                      clearInterval(pollInterval);
+                      alert("Export failed: " + statusData.message);
+                      setExporting(false);
+                  }
+                  // Continue polling if 'processing' or 'starting'
+              } catch (e) {
+                  console.error("Polling error", e);
+              }
+          }, 5000); // Check every 5s
+
       } catch (e) {
           console.error(e);
-          alert("Export request failed. Check 'System Logs' in settings for details.");
-      } finally {
+          alert("Network error.");
           setExporting(false);
       }
   };
