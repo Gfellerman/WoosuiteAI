@@ -413,22 +413,7 @@ class WooSuite_Api {
             );
         }
 
-        // --- DEBUG LOGGING START ---
-        // Log the constructed query to help debug filter issues (e.g., recursive categories)
-        $debug_logs = get_option('woosuite_debug_log', array());
-        $debug_msg = 'API Query Args: ' . json_encode(array(
-            'tax_query' => isset($args['tax_query']) ? $args['tax_query'] : 'none',
-            'category_param' => $category,
-            'post_type' => $type,
-            'search' => $search
-        ));
-        $timestamp = date('Y-m-d H:i:s');
-        $debug_entry = "[$timestamp] [DEBUG] $debug_msg";
-
-        array_unshift($debug_logs, $debug_entry);
-        if (count($debug_logs) > 50) array_pop($debug_logs);
-        update_option('woosuite_debug_log', $debug_logs);
-        // --- DEBUG LOGGING END ---
+        // (Debug logging removed to prevent System Logs spam)
 
         $meta_query = array();
 
@@ -1187,6 +1172,10 @@ class WooSuite_Api {
     }
 
     public function export_database_route( $request ) {
+        // Prevent timeouts for large exports
+        @set_time_limit( 0 );
+        @ignore_user_abort( true );
+
         if ( ! class_exists( 'WooSuite_Backup' ) ) {
             require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
         }

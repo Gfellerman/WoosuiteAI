@@ -53,6 +53,8 @@ class WooSuite_Backup {
     public function export_database() {
         global $wpdb;
 
+        $this->log_info( "Starting export process..." );
+
         // Prepare file
         $upload_dir = wp_upload_dir();
         $public_dir = $upload_dir['basedir'] . '/woosuite-exports-temp';
