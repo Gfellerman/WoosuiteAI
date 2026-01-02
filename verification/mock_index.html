@@ -4,77 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WooSuite AI Verification</title>
-    <!-- Inject Styles -->
-    <link rel="stylesheet" href="../assets/woosuite-app.css">
-
+    <link rel="stylesheet" href="/assets/woosuite-app.css">
     <script>
-        // MOCK DATA INJECTION
         window.woosuiteData = {
-            root: 'http://localhost/wp-json/',
-            homeUrl: 'http://localhost',
-            nonce: 'mock-nonce',
-            apiUrl: 'http://localhost/wp-json/woosuite/v1',
-            apiKey: 'mock-groq-key'
-        };
-
-        // Mock Fetch
-        const originalFetch = window.fetch;
-        window.fetch = async (url, options) => {
-            console.log('Fetch:', url);
-
-            // Mock GET Settings
-            if (url.includes('/settings') && (!options || options.method === 'GET')) {
-                return {
-                    ok: true,
-                    json: async () => ({
-                        apiKey: 'mock-groq-key',
-                        useCustomApi: false,
-                        customApiUrl: '',
-                        customModelId: ''
-                    })
-                };
-            }
-
-            // Mock POST Settings
-            if (url.includes('/settings') && options.method === 'POST') {
-                return {
-                    ok: true,
-                    json: async () => ({ success: true })
-                };
-            }
-
-            // Mock Stats
-            if (url.includes('/stats')) {
-                 return {
-                    ok: true,
-                    json: async () => ({
-                        orders: 120,
-                        seo_score: 85,
-                        threats_blocked: 5,
-                        ai_searches: 12,
-                        last_backup: '2025-01-01'
-                    })
-                 };
-            }
-
-            // Mock Content/Products
-            if (url.includes('/content')) {
-                 return {
-                    ok: true,
-                    json: async () => ([
-                        { id: 1, name: 'Test Product', price: 10, status: 'publish', date_created: '2025-01-01T12:00:00' }
-                    ])
-                 };
-            }
-
-            return { ok: true, json: async () => ({}) };
+            root: 'http://localhost:8081/wp-json/',
+            nonce: 'mock_nonce',
+            apiUrl: 'http://localhost:8081/api-mock', // We will intercept this in Playwright
+            homeUrl: 'http://test.lacasa.market',
+            apiKey: 'mock_key'
         };
     </script>
 </head>
-<body class="bg-gray-100 p-8">
+<body class="bg-gray-100">
     <div id="woosuite-app-root"></div>
-
-    <!-- Inject React App -->
-    <script type="module" src="../assets/woosuite-app.js"></script>
+    <script type="module" src="/assets/woosuite-app.js"></script>
 </body>
 </html>

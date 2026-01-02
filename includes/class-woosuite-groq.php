@@ -137,23 +137,30 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
-    public function analyze_migration_readiness( $system_report ) {
+    public function analyze_migration_readiness( $system_report, $old_domain = '', $new_domain = '' ) {
         if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
         }
 
         $report_json = json_encode( $system_report );
 
+        $domain_context = "";
+        if ( ! empty( $old_domain ) && ! empty( $new_domain ) ) {
+            $domain_context = "\nMigration Context: Moving from '$old_domain' (Current/Test) to '$new_domain' (Target/Production).";
+        }
+
         $prompt = "
             You are a Senior WordPress DevOps Engineer. Analyze this System Report for a site migration (40GB data).
+            $domain_context
 
             System Report:
             $report_json
 
             Task:
             1. Identify potential risks (e.g., Low PHP memory, specific plugins like Caching/Security that might break migration).
-            2. Assign a 'Risk Level' (Low, Medium, High).
-            3. Provide 3 specific recommendations for the user before they export the database.
+            2. If domains are provided, suggest specific settings or hardcoded paths to watch out for.
+            3. Assign a 'Risk Level' (Low, Medium, High).
+            4. Provide 3 specific recommendations for the user before they export the database.
 
             Output strictly JSON:
             {
