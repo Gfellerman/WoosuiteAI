@@ -75,12 +75,18 @@ class WooSuite_Backup {
     }
 
     public function start_export_process() {
+        // Explicit logging to confirm execution flow
+        $this->log_info( "Initiating export process..." );
+
         $db_size_mb = $this->get_db_size_mb();
         $free_space_bytes = disk_free_space( $this->base_dir );
         $free_space_mb = $free_space_bytes ? round( $free_space_bytes / 1024 / 1024, 2 ) : 0;
 
+        $this->log_info( "DB Size: {$db_size_mb}MB, Free Space: {$free_space_mb}MB" );
+
         // Safety margin: 1.1x DB size
         if ( $free_space_mb < ( $db_size_mb * 1.1 ) ) {
+            $this->log_error( "Insufficient disk space." );
             return new WP_Error( 'disk_space', "Insufficient disk space. Need approx " . ($db_size_mb * 1.1) . "MB, found {$free_space_mb}MB." );
         }
 
@@ -95,7 +101,11 @@ class WooSuite_Backup {
         // Save filename to retrieve later
         update_option( 'woosuite_export_filename', $filename );
 
-        if ( $this->command_exists( 'mysqldump' ) ) {
+        // Try mysqldump
+        $mysqldump_available = $this->command_exists( 'mysqldump' );
+        $this->log_info( "mysqldump check: " . ($mysqldump_available ? "Available" : "Not Found") );
+
+        if ( $mysqldump_available ) {
             $db_name = DB_NAME;
             $db_user = DB_USER;
             $db_pass = DB_PASSWORD;
@@ -120,9 +130,11 @@ class WooSuite_Backup {
             );
 
             exec( $cmd );
-            $this->log_info( "Started background export: $filename" );
+            $this->log_info( "Started background mysqldump: $filename" );
             return true; // Implies method: 'mysqldump' (default in frontend)
         } else {
+             $this->log_info( "Switching to PHP Chunked Export mode." );
+
              // Fallback: Create file with header
              $header = "-- WooSuite SQL Dump\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- PHP Fallback Mode\n\nSET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\nSET time_zone = \"+00:00\";\n\n";
              file_put_contents( $filepath, $header );
@@ -184,17 +196,13 @@ class WooSuite_Backup {
             $buffer .= implode( ',', $entries ) . ";\n";
         }
 
-        // 3. Footer (Only on last chunk?)
-        // We can't easily know if it's the last chunk here without counting.
-        // Frontend knows. But SQL requires ENABLE KEYS after inserts.
-        // It's safer to ENABLE KEYS after every chunk? No, expensive.
-        // Better: We append ENABLE KEYS only if we returned fewer rows than limit?
+        // 3. Footer
         if ( count( $rows ) < $limit ) {
              $buffer .= "/*!40000 ALTER TABLE `$table` ENABLE KEYS */;\n";
         }
 
         // Write to file (Append)
-        // Locking to prevent race conditions (though requests should be sequential)
+        // Locking to prevent race conditions
         file_put_contents( $filepath, $buffer, FILE_APPEND | LOCK_EX );
 
         return array( 'count' => count( $rows ) );
@@ -281,16 +289,12 @@ class WooSuite_Backup {
         $tables = $wpdb->get_col( "SHOW TABLES" );
 
         foreach ( $tables as $table ) {
-            // Skip logs or huge non-content tables if needed? No, user wants full migration.
-
-            // Get columns
             $columns = $wpdb->get_results( "SHOW COLUMNS FROM `$table`" );
             $pk = null;
             $text_cols = array();
 
             foreach ( $columns as $col ) {
                 if ( $col->Key === 'PRI' ) $pk = $col->Field;
-                // Check for text types: varchar, text, longtext, mediumtext
                 if ( preg_match( '/(char|text|blob)/i', $col->Type ) ) {
                     $text_cols[] = $col->Field;
                 }
@@ -298,7 +302,6 @@ class WooSuite_Backup {
 
             if ( ! $pk || empty( $text_cols ) ) continue;
 
-            // Process table in chunks to avoid memory issues
             $offset = 0;
             $limit = 1000;
 
@@ -339,7 +342,6 @@ class WooSuite_Backup {
                 }
 
                 $offset += $limit;
-                // Safety brake? No, let it run.
             }
         }
 
@@ -355,8 +357,7 @@ class WooSuite_Backup {
             }
             return $data;
         } elseif ( is_object( $data ) ) {
-            if ( $data instanceof __PHP_Incomplete_Class ) return $data; // Skip broken objects
-            // Handle standard objects
+            if ( $data instanceof __PHP_Incomplete_Class ) return $data;
             $vars = get_object_vars( $data );
             foreach ( $vars as $key => $value ) {
                 $data->$key = $this->recursive_replace( $value, $old, $new );
@@ -368,8 +369,7 @@ class WooSuite_Backup {
 
     private function command_exists( $cmd ) {
         if ( ! function_exists( 'shell_exec' ) ) return false;
-        // Check open_basedir
-        if ( ini_get( 'open_basedir' ) ) return false; // Likely cannot execute global binaries
+        if ( ini_get( 'open_basedir' ) ) return false;
 
         $return = shell_exec( sprintf( "which %s", escapeshellarg( $cmd ) ) );
         return ! empty( $return );
@@ -377,6 +377,7 @@ class WooSuite_Backup {
 
     private function log_info( $message ) {
         $logs = get_option( 'woosuite_debug_log', array() );
+        if (!is_array($logs)) $logs = array(); // Safety
         $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [INFO] [Backup] " . $message;
         array_unshift( $logs, $entry );
         if ( count( $logs ) > 50 ) array_pop( $logs );
@@ -385,6 +386,7 @@ class WooSuite_Backup {
 
     private function log_error( $message ) {
         $logs = get_option( 'woosuite_debug_log', array() );
+        if (!is_array($logs)) $logs = array(); // Safety
         $entry = "[" . date( 'Y-m-d H:i:s' ) . "] [ERROR] [Backup] " . $message;
         array_unshift( $logs, $entry );
         if ( count( $logs ) > 50 ) array_pop( $logs );

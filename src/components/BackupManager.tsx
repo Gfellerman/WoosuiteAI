@@ -144,7 +144,15 @@ const BackupManager: React.FC = () => {
           });
           const data = await res.json();
 
+          // Special handling for legacy errors or explicit "not found" messages
+          // If the backend returns "mysqldump not found", force chunked mode.
           if (!res.ok) {
+              if (data.message && data.message.includes('mysqldump not found')) {
+                 console.warn("Forcing PHP Chunked Mode due to missing mysqldump.");
+                 await handleChunkedExport();
+                 return;
+              }
+
               alert("Start failed: " + (data.message || "Unknown error"));
               setExporting(false);
               return;
