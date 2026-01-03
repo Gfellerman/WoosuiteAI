@@ -398,7 +398,13 @@ class WooSuite_Groq {
             4. If the link is inside a serialized string (s:5:\"...\"), flag it as 'serialized'.
             5. If no issues found in an item, omit it.
 
-            Output strictly JSON array of objects:
+            CRITICAL OUTPUT RULES:
+            - You MUST return ONLY a valid JSON Array.
+            - Do NOT wrap in Markdown code blocks.
+            - Do NOT add conversational text.
+            - Start with '[' and end with ']'.
+
+            Example Output:
             [
                 {
                     \"source_id\": 123,
@@ -415,14 +421,14 @@ class WooSuite_Groq {
             'messages' => array(
                 array(
                     'role' => 'system',
-                    'content' => 'You are a database migration expert. Output strictly JSON.'
+                    'content' => 'You are a database migration expert. Output strictly JSON array.'
                 ),
                 array(
                     'role' => 'user',
                     'content' => $prompt
                 )
             ),
-            'response_format' => array( 'type' => 'json_object' )
+            // 'response_format' => array( 'type' => 'json_object' ) // Disabled to prevent 400 errors with Lists
         );
 
         return $this->call_api( $body, true );
@@ -548,13 +554,21 @@ class WooSuite_Groq {
             $extracted_json = $this->extract_json_from_text( $content );
             $json = json_decode( $extracted_json, true );
 
+            // Retry 1: Basic Cleanup
             if ( json_last_error() !== JSON_ERROR_NONE ) {
                 $cleaned_json = $this->cleanup_json_syntax( $extracted_json );
                 $json = json_decode( $cleaned_json, true );
             }
 
+            // Retry 2: Truncation Fix
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                $fixed_json = $this->try_fix_truncated_json( $extracted_json );
+                $json = json_decode( $fixed_json, true );
+            }
+
             if ( json_last_error() !== JSON_ERROR_NONE ) {
                  $this->log_error( 'JSON Parse Fail: ' . json_last_error_msg() );
+                 // Fallback: Return raw content in debug mode or log it
                  error_log( 'WooSuite JSON Fail. Original: ' . $content );
                  return new WP_Error( 'json_error', 'Invalid JSON from Groq.' );
             }
@@ -565,34 +579,68 @@ class WooSuite_Groq {
     }
 
     private function extract_json_from_text( $text ) {
-        if ( preg_match( '/```(?:json)?\s*(\{.*?\})\s*```/s', $text, $matches ) ) {
-            return $matches[1];
-        }
-
-        $offset = 0;
-        $max_attempts = 5;
-        $attempt = 0;
-
-        while ( ($start = strpos( $text, '{', $offset )) !== false && $attempt < $max_attempts ) {
-            $end = strrpos( $text, '}' );
-            if ( $end !== false && $end > $start ) {
-                $candidate = substr( $text, $start, $end - $start + 1 );
-                json_decode( $candidate );
-                if ( json_last_error() === JSON_ERROR_NONE ) {
-                    return $candidate;
-                }
+        // 1. Try Markdown Code Block (Generic)
+        if ( preg_match( '/```(?:json)?\s*(.*?)```/s', $text, $matches ) ) {
+            $candidate = trim( $matches[1] );
+            // Check if it looks like JSON Object or Array
+            if ( ( substr( $candidate, 0, 1 ) === '{' && substr( $candidate, -1 ) === '}' ) ||
+                 ( substr( $candidate, 0, 1 ) === '[' && substr( $candidate, -1 ) === ']' ) ) {
+                return $candidate;
             }
-            $offset = $start + 1;
-            $attempt++;
         }
 
-        $start = strpos( $text, '{' );
-        $end = strrpos( $text, '}' );
-        if ( $start !== false && $end !== false && $end > $start ) {
-             return substr( $text, $start, $end - $start + 1 );
+        // 2. Scan for outermost JSON container ({...} or [...])
+        $first_brace = strpos( $text, '{' );
+        $first_bracket = strpos( $text, '[' );
+
+        $start = false;
+        $end_char = '';
+
+        // Determine if Object or Array starts first
+        if ( $first_brace !== false && ($first_bracket === false || $first_brace < $first_bracket) ) {
+            $start = $first_brace;
+            $end_char = '}';
+        } elseif ( $first_bracket !== false ) {
+            $start = $first_bracket;
+            $end_char = ']';
+        }
+
+        if ( $start !== false ) {
+            $end = strrpos( $text, $end_char );
+            if ( $end !== false && $end > $start ) {
+                return substr( $text, $start, $end - $start + 1 );
+            }
+
+            // If end not found, return from start to end (Truncated)
+            return substr( $text, $start );
         }
 
         return $text;
+    }
+
+    private function try_fix_truncated_json( $json ) {
+        $json = trim( $json );
+        // Determine type
+        if ( substr( $json, 0, 1 ) === '[' ) {
+            // It's an array. If it doesn't end with ], append it.
+            if ( substr( $json, -1 ) !== ']' ) {
+                // Check if it ends with a comma
+                if ( substr( $json, -1 ) === ',' ) {
+                    $json = substr( $json, 0, -1 );
+                }
+                // Try closing array
+                return $json . ']';
+            }
+        } elseif ( substr( $json, 0, 1 ) === '{' ) {
+            // It's an object.
+            if ( substr( $json, -1 ) !== '}' ) {
+                if ( substr( $json, -1 ) === ',' ) {
+                    $json = substr( $json, 0, -1 );
+                }
+                return $json . '}';
+            }
+        }
+        return $json;
     }
 
     private function cleanup_json_syntax( $json ) {
