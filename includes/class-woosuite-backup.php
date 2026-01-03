@@ -333,6 +333,263 @@ class WooSuite_Backup {
         return array( 'status' => 'starting' );
     }
 
+    /**
+     * Creates a Migration Passport.
+     * Generates a secure token and checksum for the current export.
+     */
+    public function create_passport() {
+        $filename = get_option( 'woosuite_export_filename' );
+        if ( ! $filename ) return new WP_Error( 'no_export', 'No export file found. Please run a backup first.' );
+
+        $filepath = $this->base_dir . '/' . $filename;
+        if ( ! file_exists( $filepath ) ) return new WP_Error( 'missing_file', 'Export file is missing.' );
+
+        // Generate Token
+        $token = wp_generate_password( 64, false );
+        set_transient( 'woosuite_migration_token', $token, 24 * HOUR_IN_SECONDS );
+
+        // Calculate Checksum (SHA-256) - This might take a moment for large files
+        // We use streaming hash to avoid memory issues
+        $hash = hash_file( 'sha256', $filepath );
+
+        // System Info for Compatibility Check
+        $system_info = $this->get_system_report();
+
+        $passport = array(
+            'version' => '1.0',
+            'generated_at' => time(),
+            'source_url' => get_site_url(),
+            'download_url' => add_query_arg( array(
+                'woosuite_action' => 'stream_backup',
+                'token' => $token
+            ), site_url( '/' ) ), // Public stream endpoint
+            'filename' => $filename,
+            'filesize' => filesize( $filepath ),
+            'checksum' => $hash,
+            'token' => $token, // Needed to authorize the download
+            'system' => $system_info
+        );
+
+        return $passport;
+    }
+
+    /**
+     * Validates a Passport from another site.
+     */
+    public function validate_passport( $passport ) {
+        if ( ! is_array( $passport ) || empty( $passport['token'] ) ) {
+            return new WP_Error( 'invalid_passport', 'Invalid passport data.' );
+        }
+
+        $report = array(
+            'can_migrate' => true,
+            'warnings' => array(),
+            'errors' => array()
+        );
+
+        // 1. Check PHP Version
+        $source_php = isset( $passport['system']['php_version'] ) ? $passport['system']['php_version'] : '0';
+        if ( version_compare( phpversion(), $source_php, '<' ) ) {
+            $report['warnings'][] = "Destination PHP version (" . phpversion() . ") is older than Source ($source_php). This may cause issues.";
+        }
+
+        // 2. Check Disk Space
+        $needed = $passport['filesize'] * 2.5; // File + DB Import Overhead
+        $free = disk_free_space( $this->base_dir );
+        if ( $free < $needed ) {
+            $report['errors'][] = "Insufficient Disk Space. Need " . $this->format_size( $needed ) . ", have " . $this->format_size( $free ) . ".";
+            $report['can_migrate'] = false;
+        }
+
+        return $report;
+    }
+
+    /**
+     * Streams the backup file if token is valid.
+     * This is intended to be called by a public hook (e.g. init) not REST API
+     * because REST API might buffer output or have overhead.
+     */
+    public function stream_file( $token ) {
+        $stored_token = get_transient( 'woosuite_migration_token' );
+
+        if ( ! $stored_token || ! hash_equals( $stored_token, $token ) ) {
+            wp_die( 'Unauthorized Access.', '403 Forbidden', array( 'response' => 403 ) );
+        }
+
+        $filename = get_option( 'woosuite_export_filename' );
+        $filepath = $this->base_dir . '/' . $filename;
+
+        if ( ! file_exists( $filepath ) ) wp_die( 'File not found.', '404 Not Found', array( 'response' => 404 ) );
+
+        $filesize = filesize( $filepath );
+        $offset = 0;
+        $length = $filesize;
+
+        // Handle Range Header
+        if ( isset( $_SERVER['HTTP_RANGE'] ) ) {
+            if ( preg_match( '/bytes=(\d+)-(\d+)?/', $_SERVER['HTTP_RANGE'], $matches ) ) {
+                $offset = intval( $matches[1] );
+                if ( isset( $matches[2] ) ) {
+                    $length = intval( $matches[2] ) - $offset + 1;
+                } else {
+                    $length = $filesize - $offset;
+                }
+                http_response_code( 206 );
+                header( "Content-Range: bytes $offset-" . ($offset + $length - 1) . "/$filesize" );
+            }
+        }
+
+        header( 'Content-Type: application/sql' );
+        header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+        header( 'Content-Length: ' . $length );
+        header( 'Accept-Ranges: bytes' );
+
+        $fp = fopen( $filepath, 'rb' );
+        fseek( $fp, $offset );
+
+        // Stream in chunks
+        $chunk_size = 8192;
+        $sent = 0;
+        while ( ! feof( $fp ) && $sent < $length ) {
+            $read_length = min( $chunk_size, $length - $sent );
+            echo fread( $fp, $read_length );
+            $sent += $read_length;
+            flush();
+        }
+        fclose( $fp );
+        exit;
+    }
+
+    public function import_chunk_download( $url, $offset = 0 ) {
+        $local_file = $this->base_dir . '/import_temp.sql';
+
+        // 5MB Chunks
+        $chunk_size = 5 * 1024 * 1024;
+
+        $args = array(
+            'timeout' => 60,
+            'stream' => true,
+            'filename' => $local_file,
+            'headers' => array(
+                'Range' => "bytes=$offset-" . ($offset + $chunk_size - 1)
+            ),
+            'sslverify' => false
+        );
+
+        // Note: wp_remote_get with 'filename' appends by default in some WP versions?
+        // No, WP_Http_Streams::request uses fopen( 'wb' ) usually.
+        // We must manually handle appending if offset > 0.
+        // But WP_Http doesn't easily support 'ab' mode via args.
+
+        // Workaround: We download to a temp chunk file, then append manually.
+        $temp_chunk = $this->base_dir . '/chunk.tmp';
+        $args['filename'] = $temp_chunk;
+
+        if ( file_exists( $temp_chunk ) ) unlink( $temp_chunk );
+
+        $response = wp_remote_get( $url, $args );
+
+        if ( is_wp_error( $response ) ) return $response;
+
+        $status = wp_remote_retrieve_response_code( $response );
+        if ( $status != 200 && $status != 206 ) {
+            return new WP_Error( 'http_error', "Remote status $status" );
+        }
+
+        // Append chunk to main file
+        $chunk_content = file_get_contents( $temp_chunk );
+        file_put_contents( $local_file, $chunk_content, FILE_APPEND );
+        unlink( $temp_chunk );
+
+        $bytes_received = strlen( $chunk_content );
+        $total_local_size = filesize( $local_file );
+
+        return array(
+            'bytes' => $bytes_received,
+            'total_size' => $total_local_size,
+            'done' => ($bytes_received < $chunk_size)
+        );
+    }
+
+    public function process_import_chunk( $offset = 0, $limit_time = 10, $old_domain = '', $new_domain = '' ) {
+        global $wpdb;
+        $local_file = $this->base_dir . '/import_temp.sql';
+
+        if ( ! file_exists( $local_file ) ) return new WP_Error( 'missing_file', 'Import file not found.' );
+
+        $start_time = time();
+        $processed_bytes = 0;
+
+        $fp = fopen( $local_file, 'r' );
+        if ( ! $fp ) return new WP_Error( 'file_error', 'Cannot open file.' );
+
+        if ( $offset > 0 ) fseek( $fp, $offset );
+
+        $current_query = '';
+        $queries_executed = 0;
+
+        $do_replace = ( ! empty( $old_domain ) && ! empty( $new_domain ) && $old_domain !== $new_domain );
+
+        while ( ! feof( $fp ) ) {
+            if ( $queries_executed % 50 === 0 && ( time() - $start_time ) > $limit_time ) {
+                break;
+            }
+
+            $line = fgets( $fp );
+            if ( $line === false ) break;
+
+            // Skip comments
+            if ( substr( trim($line), 0, 2 ) === '--' || substr( trim($line), 0, 2 ) === '/*' ) {
+                $processed_bytes = ftell( $fp );
+                continue;
+            }
+
+            $trimmed = trim( $line );
+            if ( empty( $trimmed ) ) {
+                $processed_bytes = ftell( $fp );
+                continue;
+            }
+
+            $current_query .= $line;
+
+            if ( substr( $trimmed, -1 ) === ';' ) {
+                if ( $do_replace && strpos( $current_query, $old_domain ) !== false ) {
+                    $current_query = $this->fix_serialized_string_in_sql( $current_query, $old_domain, $new_domain );
+                    $current_query = str_replace( $old_domain, $new_domain, $current_query );
+                }
+
+                $wpdb->query( $current_query );
+                $queries_executed++;
+                $current_query = '';
+                $processed_bytes = ftell( $fp );
+            }
+        }
+
+        fclose( $fp );
+
+        return array(
+            'offset' => $processed_bytes,
+            'done' => feof( $fp ) && empty( $current_query ),
+            'queries' => $queries_executed
+        );
+    }
+
+    private function fix_serialized_string_in_sql( $sql, $old, $new ) {
+        return preg_replace_callback(
+            '/s:(\d+):"(.*?)";/s',
+            function( $matches ) use ( $old, $new ) {
+                $len = intval( $matches[1] );
+                $str = $matches[2];
+                if ( strpos( $str, $old ) !== false ) {
+                    $new_str = str_replace( $old, $new, $str );
+                    return \'s:\' . strlen( $new_str ) . \':"\' . $new_str . \'";\';
+                }
+                return $matches[0];
+            },
+            $sql
+        );
+    }
+
     private function cleanup_temp_files() {
         array_map( 'unlink', glob( $this->base_dir . '/*.sql' ) );
         array_map( 'unlink', glob( $this->base_dir . '/*.flag' ) );
