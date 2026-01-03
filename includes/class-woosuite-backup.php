@@ -74,7 +74,12 @@ class WooSuite_Backup {
         return $tables;
     }
 
-    public function start_export_process() {
+    /**
+     * Start the export process.
+     *
+     * @param array $options Optional. { 'replace' => bool, 'old_domain' => string, 'new_domain' => string }
+     */
+    public function start_export_process( $options = array() ) {
         // Explicit logging to confirm execution flow
         $this->log_info( "Initiating export process..." );
 
@@ -100,6 +105,14 @@ class WooSuite_Backup {
 
         // Save filename to retrieve later
         update_option( 'woosuite_export_filename', $filename );
+
+        // If replacement is requested, we MUST use PHP Chunked mode to intercept and modify data
+        if ( isset( $options['replace'] ) && $options['replace'] === true ) {
+            $this->log_info( "Replacement requested. Forcing PHP Chunked Export." );
+            $header = "-- WooSuite SQL Dump (With URL Replacement)\n-- Generated: " . date('Y-m-d H:i:s') . "\n-- Search: {$options['old_domain']} -> Replace: {$options['new_domain']}\n\nSET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\nSET time_zone = \"+00:00\";\n\n";
+            file_put_contents( $filepath, $header );
+            return array( 'method' => 'php_chunked', 'filename' => $filename );
+        }
 
         // Try mysqldump
         $mysqldump_available = $this->command_exists( 'mysqldump' );
@@ -144,7 +157,7 @@ class WooSuite_Backup {
         }
     }
 
-    public function export_table_chunk( $table, $offset, $limit ) {
+    public function export_table_chunk( $table, $offset, $limit, $search = '', $replace = '' ) {
         global $wpdb;
 
         $filename = get_option( 'woosuite_export_filename' );
@@ -180,12 +193,36 @@ class WooSuite_Backup {
         if ( ! empty( $rows ) ) {
             $buffer .= "INSERT INTO `$table` VALUES ";
             $entries = array();
+
+            // Check if replacement is needed
+            $do_replace = ( ! empty( $search ) && ! empty( $replace ) && $search !== $replace );
+
             foreach ( $rows as $row ) {
                 $values = array();
                 foreach ( $row as $value ) {
                     if ( $value === null ) {
                         $values[] = "NULL";
                     } else {
+                        // REPLACEMENT LOGIC
+                        if ( $do_replace ) {
+                            // Only attempt replace on strings
+                            if ( is_string( $value ) && strpos( $value, $search ) !== false ) {
+                                // Try unserialize first
+                                if ( is_serialized( $value ) ) {
+                                     $unserialized = @unserialize( $value );
+                                     if ( $unserialized !== false || $value === 'b:0;' ) {
+                                         $fixed_data = $this->recursive_replace( $unserialized, $search, $replace );
+                                         $value = serialize( $fixed_data );
+                                     } else {
+                                         // Fallback if unserialize fails but looks serialized
+                                         $value = str_replace( $search, $replace, $value );
+                                     }
+                                } else {
+                                     $value = str_replace( $search, $replace, $value );
+                                }
+                            }
+                        }
+
                         // Escape special chars
                         $value = $wpdb->_real_escape( $value );
                         $values[] = "'" . $value . "'";

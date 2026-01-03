@@ -1204,8 +1204,16 @@ class WooSuite_Api {
         if ( ! class_exists( 'WooSuite_Backup' ) ) {
             require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
         }
+
+        $params = $request->get_json_params();
+        $options = array(
+            'replace' => isset( $params['replace'] ) && $params['replace'] === true,
+            'old_domain' => isset( $params['old_domain'] ) ? sanitize_text_field( $params['old_domain'] ) : '',
+            'new_domain' => isset( $params['new_domain'] ) ? sanitize_text_field( $params['new_domain'] ) : ''
+        );
+
         $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
-        $result = $backup->start_export_process();
+        $result = $backup->start_export_process( $options );
 
         if ( is_wp_error( $result ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
@@ -1234,6 +1242,8 @@ class WooSuite_Api {
         $table = isset( $params['table'] ) ? sanitize_text_field( $params['table'] ) : '';
         $offset = isset( $params['offset'] ) ? intval( $params['offset'] ) : 0;
         $limit = isset( $params['limit'] ) ? intval( $params['limit'] ) : 1000;
+        $search = isset( $params['search'] ) ? sanitize_text_field( $params['search'] ) : '';
+        $replace = isset( $params['replace'] ) ? sanitize_text_field( $params['replace'] ) : '';
 
         if ( empty( $table ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Table missing' ), 400 );
@@ -1243,7 +1253,7 @@ class WooSuite_Api {
             require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
         }
         $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
-        $result = $backup->export_table_chunk( $table, $offset, $limit );
+        $result = $backup->export_table_chunk( $table, $offset, $limit, $search, $replace );
 
         if ( is_wp_error( $result ) ) {
             return new WP_REST_Response( array( 'success' => false, 'message' => $result->get_error_message() ), 500 );
