@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, HardDrive, Download, RotateCcw, CheckCircle, ArrowRightLeft, Shield, Server, Database, AlertTriangle, Loader, Check, Sparkles, AlertOctagon } from 'lucide-react';
 import DeepLinkScanner from './Migration/DeepLinkScanner';
+import MigrationStation from './Migration/MigrationStation';
 
 const BackupManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'backups' | 'migration'>('backups');
@@ -10,6 +11,7 @@ const BackupManager: React.FC = () => {
   const [progress, setProgress] = useState(0);
 
   // Migration State
+  const [migrationMode, setMigrationMode] = useState<'export' | 'import'>('export');
   const [migrationStep, setMigrationStep] = useState<number>(1);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<any>(null);
@@ -242,6 +244,29 @@ const BackupManager: React.FC = () => {
 
       {activeTab === 'migration' ? (
           <div className="max-w-4xl mx-auto">
+
+              {/* Mode Toggle */}
+              <div className="flex justify-center mb-8">
+                  <div className="bg-gray-100 p-1 rounded-lg inline-flex shadow-inner">
+                      <button
+                          onClick={() => setMigrationMode('export')}
+                          className={`px-6 py-2 rounded-md text-sm font-bold transition flex items-center gap-2 ${migrationMode === 'export' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                          <Database size={16} /> Export (Source Site)
+                      </button>
+                      <button
+                          onClick={() => setMigrationMode('import')}
+                          className={`px-6 py-2 rounded-md text-sm font-bold transition flex items-center gap-2 ${migrationMode === 'import' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                          <Download size={16} /> Import (Destination Site)
+                      </button>
+                  </div>
+              </div>
+
+              {migrationMode === 'import' ? (
+                  <MigrationStation onCancel={() => setMigrationMode('export')} />
+              ) : (
+                  <>
               {/* Progress Stepper */}
               <div className="flex items-center justify-between mb-8 relative">
                   <div className="absolute left-0 top-1/2 w-full h-0.5 bg-gray-200 -z-10"></div>
@@ -505,6 +530,8 @@ const BackupManager: React.FC = () => {
                   <DeepLinkScanner oldDomain={oldDomain} newDomain={newDomain} />
               </React.Fragment>
               )}
+              </>
+            )}
           </div>
       ) : (
           /* BACKUPS TAB (Placeholder) */
