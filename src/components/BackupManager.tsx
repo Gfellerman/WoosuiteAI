@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cloud, HardDrive, Download, RotateCcw, CheckCircle, ArrowRightLeft, Shield, Server, Database, AlertTriangle, Loader, Check, Sparkles } from 'lucide-react';
+import { Cloud, HardDrive, Download, RotateCcw, CheckCircle, ArrowRightLeft, Shield, Server, Database, AlertTriangle, Loader, Check, Sparkles, AlertOctagon } from 'lucide-react';
 
 const BackupManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'backups' | 'migration'>('backups');
@@ -19,6 +19,11 @@ const BackupManager: React.FC = () => {
 
   const [oldDomain, setOldDomain] = useState('');
   const [newDomain, setNewDomain] = useState('');
+
+  // New State for Advanced Export
+  const [doReplace, setDoReplace] = useState(false);
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
+
   const [replacing, setReplacing] = useState(false);
   const [replaceResult, setReplaceResult] = useState<any>(null);
 
@@ -34,6 +39,13 @@ const BackupManager: React.FC = () => {
       }
   }, [homeUrl, activeTab]);
 
+  // Auto-toggle replace if domains are different
+  useEffect(() => {
+      if (activeTab === 'migration' && oldDomain && newDomain && oldDomain !== newDomain) {
+          setDoReplace(true);
+      }
+  }, [oldDomain, newDomain, activeTab]);
+
   const handleAnalyze = async () => {
       setAnalyzing(true);
       setAnalysisReport(null);
@@ -46,7 +58,6 @@ const BackupManager: React.FC = () => {
           const data = await res.json();
           if (res.ok) {
               setAnalysisReport(data);
-              // setMigrationStep(2); // Let user read report first
           } else {
               alert("Analysis failed: " + data.message);
           }
@@ -70,19 +81,13 @@ const BackupManager: React.FC = () => {
           if ( !tablesData.tables ) throw new Error("Could not fetch tables.");
 
           const tables: {name: string, rows: number}[] = tablesData.tables;
-          let totalRows = tables.reduce((acc, t) => acc + t.rows, 0);
-          let exportedRows = 0;
+          // let totalRows = tables.reduce((acc, t) => acc + t.rows, 0); // Unused for now
+          // let exportedRows = 0;
 
           // 2. Iterate and Chunk
           for (const table of tables) {
               const limit = 1000;
               let offset = 0;
-
-              // If table empty, might still need structure, but loop condition handles rows > 0.
-              // We need at least one call for structure if rows == 0?
-              // Our backend logic handles structure on offset 0.
-              // If rows is 0, we still need to call once with limit 0? Or backend handles it?
-              // Let's call at least once.
 
               let hasMore = true;
               while (hasMore) {
@@ -92,7 +97,14 @@ const BackupManager: React.FC = () => {
                   const chunkRes = await fetch(`${apiUrl}/backup/export/chunk`, {
                        method: 'POST',
                        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-                       body: JSON.stringify({ table: table.name, offset: offset, limit: limit })
+                       body: JSON.stringify({
+                           table: table.name,
+                           offset: offset,
+                           limit: limit,
+                           // PASS REPLACEMENT PARAMS
+                           search: doReplace ? oldDomain : '',
+                           replace: doReplace ? newDomain : ''
+                       })
                   });
 
                   if (!chunkRes.ok) {
@@ -103,13 +115,13 @@ const BackupManager: React.FC = () => {
                   const chunkData = await chunkRes.json();
                   const count = chunkData.count;
 
-                  exportedRows += count;
+                  // exportedRows += count;
                   offset += count;
 
                   if (count < limit) hasMore = false;
 
                   // Small delay to prevent server overload
-                  await new Promise(r => setTimeout(r, 100));
+                  await new Promise(r => setTimeout(r, 50));
               }
           }
 
@@ -134,18 +146,27 @@ const BackupManager: React.FC = () => {
   };
 
   const handleExportDB = async () => {
+      if (doReplace && !backupConfirmed) {
+          alert("Please confirm that you have created a backup of the DESTINATION site before proceeding with replacement.");
+          return;
+      }
+
       setExporting(true);
       setExportProgress('Initializing...');
       try {
-          // 1. Start Process
+          // 1. Start Process (Pass replace params)
           const res = await fetch(`${apiUrl}/backup/export`, {
               method: 'POST',
-              headers: { 'X-WP-Nonce': nonce }
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+              body: JSON.stringify({
+                  replace: doReplace,
+                  old_domain: oldDomain,
+                  new_domain: newDomain
+              })
           });
           const data = await res.json();
 
           // Special handling for legacy errors or explicit "not found" messages
-          // If the backend returns "mysqldump not found", force chunked mode.
           if (!res.ok) {
               if (data.message && data.message.includes('mysqldump not found')) {
                  console.warn("Forcing PHP Chunked Mode due to missing mysqldump.");
@@ -158,7 +179,7 @@ const BackupManager: React.FC = () => {
               return;
           }
 
-          // CHECK FOR PHP FALLBACK SIGNAL
+          // CHECK FOR PHP FALLBACK SIGNAL (This should happen if doReplace is true)
           if (data.method === 'php_chunked') {
               // Switch to Chunked Export Mode
               await handleChunkedExport();
@@ -192,30 +213,6 @@ const BackupManager: React.FC = () => {
           console.error(e);
           alert("Network error.");
           setExporting(false);
-      }
-  };
-
-  const handleReplace = async () => {
-      if (!oldDomain || !newDomain) {
-          alert("Please enter both domains.");
-          return;
-      }
-      if (!confirm(`CRITICAL WARNING: This will replace '${oldDomain}' with '${newDomain}' in your entire database. This cannot be undone. Ensure you have a backup!`)) return;
-
-      setReplacing(true);
-      try {
-          const res = await fetch(`${apiUrl}/backup/replace`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-              body: JSON.stringify({ old_domain: oldDomain, new_domain: newDomain })
-          });
-          const data = await res.json();
-          setReplaceResult(data);
-      } catch (e) {
-          console.error(e);
-          alert("Replacement failed.");
-      } finally {
-          setReplacing(false);
       }
   };
 
@@ -257,13 +254,13 @@ const BackupManager: React.FC = () => {
                               {step}
                           </div>
                           <span className="text-sm font-medium">
-                              {step === 1 ? 'AI Pre-Flight' : step === 2 ? 'DB Export' : 'URL Swap'}
+                              {step === 1 ? 'AI Pre-Flight' : step === 2 ? 'DB Export' : 'Instructions'}
                           </span>
                       </div>
                   ))}
               </div>
 
-              {/* Step 1: AI Analysis */}
+              {/* Step 1: AI Analysis (Now Shared Inputs) */}
               {migrationStep === 1 && (
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-right-4">
                       <div className="text-center max-w-lg mx-auto">
@@ -272,10 +269,10 @@ const BackupManager: React.FC = () => {
                           </div>
                           <h3 className="text-xl font-bold text-gray-800 mb-2">AI Pre-Flight Check</h3>
                           <p className="text-gray-500 mb-6">
-                              Before moving your 40GB site, let our AI analyze your system, PHP version, and plugins to ensure the destination server is compatible.
+                              Configure your migration domains below. Our AI will analyze your system for compatibility issues.
                           </p>
 
-                          {/* Domain Inputs for AI Context */}
+                          {/* Domain Inputs for AI Context & Global State */}
                           <div className="grid grid-cols-2 gap-4 mb-6 text-left max-w-md mx-auto">
                               <div>
                                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Domain (Test)</label>
@@ -311,6 +308,7 @@ const BackupManager: React.FC = () => {
                               </button>
                           ) : (
                               <div className="text-left mt-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+                                  {/* Report Details */}
                                   <div className="flex justify-between items-center mb-4">
                                       <h4 className="font-bold text-gray-800 flex items-center gap-2"><CheckCircle className="text-green-500"/> System Analysis</h4>
                                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${analysisReport.risk === 'low' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -341,36 +339,91 @@ const BackupManager: React.FC = () => {
                   </div>
               )}
 
-              {/* Step 2: DB Export */}
+              {/* Step 2: DB Export (The Main Hub) */}
               {migrationStep === 2 && (
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-right-4">
                       <div className="flex gap-8">
                           <div className="w-1/3 border-r border-gray-100 pr-8 hidden md:block">
-                              <h4 className="font-bold text-gray-800 mb-4">Files (40GB)</h4>
+                              <h4 className="font-bold text-gray-800 mb-4">Step 2: Database Export</h4>
                               <p className="text-sm text-gray-500 mb-4">
-                                  Due to the large size, please move your files manually via FTP or Hostinger File Manager.
+                                  This tool generates a SQL file containing all your products, posts, and settings.
                               </p>
-                              <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800 border border-blue-100">
-                                  <strong>Tip:</strong> Zip `wp-content/uploads` on the server before downloading to save time.
+
+                              <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800 border border-blue-100 mb-4">
+                                  <strong>Files (Images/Uploads):</strong>
+                                  <br/>Since files are too large (40GB+), you must move `wp-content/uploads` manually via FTP.
+                              </div>
+
+                              <div className="text-xs text-gray-400">
+                                  Current Source: <span className="font-mono text-gray-600">{oldDomain}</span>
                               </div>
                           </div>
+
                           <div className="flex-1">
                                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                   <Database size={20} className="text-purple-600" /> Database Export
+                                   <Database size={20} className="text-purple-600" /> Export Configuration
                                </h4>
-                               <p className="text-sm text-gray-600 mb-6">
-                                   We will export a clean SQL dump of your database. This handles serialized data safely.
-                               </p>
+
+                               {/* ADVANCED EXPORT OPTIONS */}
+                               <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="font-bold text-sm text-gray-700 flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={doReplace}
+                                                onChange={e => setDoReplace(e.target.checked)}
+                                                className="w-4 h-4 text-purple-600 rounded"
+                                            />
+                                            Replace Domains in Export File
+                                        </label>
+                                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">Recommended</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-4 ml-6">
+                                        If checked, we will search for <strong>{oldDomain}</strong> and replace it with <strong>{newDomain}</strong> inside the SQL file.
+                                        This makes the file ready for immediate import on the live site without further actions.
+                                    </p>
+
+                                    {doReplace && (
+                                        <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 ml-6 animate-in fade-in">
+                                            <div className="flex gap-3">
+                                                <AlertOctagon className="text-amber-600 shrink-0" size={20} />
+                                                <div>
+                                                    <h5 className="text-sm font-bold text-amber-800">Safety Check Required</h5>
+                                                    <p className="text-xs text-amber-700 mt-1 mb-2">
+                                                        You are about to generate a file that will <strong>overwrite</strong> your live site's database.
+                                                        If anything goes wrong during import on the live site, you will need a backup to restore it.
+                                                        <br/><br/>
+                                                        <strong>We cannot backup the live site from here.</strong> You must do it manually.
+                                                    </p>
+                                                    <label className="flex items-start gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={backupConfirmed}
+                                                            onChange={e => setBackupConfirmed(e.target.checked)}
+                                                            className="mt-1 w-4 h-4 text-amber-600 rounded border-amber-400 focus:ring-amber-500"
+                                                        />
+                                                        <span className="text-xs font-bold text-amber-900">
+                                                            I confirm I have logged into {newDomain || 'the destination site'} and created a full database backup there.
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                               </div>
 
                                {!exportUrl ? (
                                    <div className="space-y-4">
                                        <button
                                          onClick={handleExportDB}
-                                         disabled={exporting}
-                                         className="w-full bg-gray-800 text-white py-4 rounded-xl font-bold hover:bg-gray-900 transition flex items-center justify-center gap-2"
+                                         disabled={exporting || (doReplace && !backupConfirmed)}
+                                         className={`w-full py-4 rounded-xl font-bold transition flex items-center justify-center gap-2
+                                            ${exporting || (doReplace && !backupConfirmed)
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : 'bg-gray-900 text-white hover:bg-black shadow-lg shadow-gray-200'}`}
                                        >
                                            {exporting ? <Loader className="animate-spin" /> : <Download size={20} />}
-                                           {exporting ? (exportProgress || 'Exporting Database...') : 'Generate SQL Dump'}
+                                           {exporting ? (exportProgress || 'Processing...') : (doReplace ? 'Generate Migration-Ready SQL' : 'Generate Standard SQL Dump')}
                                        </button>
                                        {exporting && (
                                            <div className="text-xs text-center text-gray-500 animate-pulse">
@@ -379,20 +432,22 @@ const BackupManager: React.FC = () => {
                                        )}
                                    </div>
                                ) : (
-                                   <div className="bg-green-50 p-6 rounded-xl border border-green-200 text-center">
+                                   <div className="bg-green-50 p-6 rounded-xl border border-green-200 text-center animate-in zoom-in-95">
                                        <CheckCircle size={40} className="text-green-500 mx-auto mb-2" />
-                                       <h5 className="font-bold text-green-800 text-lg">Export Ready!</h5>
-                                       <p className="text-green-700 mb-4 text-sm">database_export.sql</p>
+                                       <h5 className="font-bold text-green-800 text-lg">Export Complete!</h5>
+                                       <p className="text-green-700 mb-4 text-sm">
+                                            {doReplace ? 'migration_ready_export.sql' : 'database_export.sql'}
+                                       </p>
                                        <a
                                             href={exportUrl}
                                             download
                                             className="inline-block bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition"
                                        >
-                                           Download SQL
+                                           Download SQL File ({doReplace ? 'Ready for Import' : 'Raw Backup'})
                                        </a>
                                        <div className="mt-4 pt-4 border-t border-green-200">
                                            <button onClick={() => setMigrationStep(3)} className="text-green-800 font-medium text-sm hover:underline">
-                                               I have moved my files, go to URL Swap &rarr;
+                                               Next: View Import Instructions &rarr;
                                            </button>
                                        </div>
                                    </div>
@@ -402,71 +457,47 @@ const BackupManager: React.FC = () => {
                   </div>
               )}
 
-              {/* Step 3: URL Swap */}
+              {/* Step 3: Instructions (Formerly URL Swap) */}
               {migrationStep === 3 && (
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-right-4">
-                      <div className="max-w-lg mx-auto">
-                          <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                              <ArrowRightLeft className="text-purple-600" /> URL Search & Replace
+                      <div className="max-w-2xl mx-auto">
+                          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                              <CheckCircle className="text-purple-600" /> Migration Instructions
                           </h3>
-                          <p className="text-sm text-gray-500 mb-6">
-                              Run this <strong>AFTER</strong> importing the database to the new site. It fixes all links (images, settings, Elementor data).
-                          </p>
 
-                          <div className="space-y-4 mb-6">
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Old Domain (Search)</label>
-                                  <input
-                                    type="text"
-                                    value={oldDomain}
-                                    onChange={e => setOldDomain(e.target.value)}
-                                    placeholder="test.lacasa.market"
-                                    className="w-full p-3 border border-gray-300 rounded-lg font-mono text-sm"
-                                  />
+                          <div className="space-y-6 text-gray-600">
+                              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                  <h4 className="font-bold text-gray-800 mb-2">If you used "Replace Domains in Export":</h4>
+                                  <ol className="list-decimal list-inside space-y-2 text-sm">
+                                      <li>Go to your destination site (<strong>{newDomain}</strong>).</li>
+                                      <li>Ensure you have a backup there (as confirmed in Step 2).</li>
+                                      <li>Import the SQL file using PHPMyAdmin, WP-CLI, or a generic import plugin.</li>
+                                      <li><strong>Done!</strong> Your site should work immediately.</li>
+                                  </ol>
                               </div>
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">New Domain (Replace)</label>
-                                  <input
-                                    type="text"
-                                    value={newDomain}
-                                    onChange={e => setNewDomain(e.target.value)}
-                                    placeholder="lacasa.market"
-                                    className="w-full p-3 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                  />
+
+                              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                  <h4 className="font-bold text-gray-800 mb-2">If you generated a Standard Dump (Raw):</h4>
+                                  <p className="text-sm mb-2">The file contains links to <strong>{oldDomain}</strong>. After importing, the site will likely redirect you back here.</p>
+                                  <p className="text-sm">You must run a "Search & Replace" tool on the destination site manually to fix the links.</p>
+                              </div>
+
+                              <div className="text-center pt-4">
+                                   <button
+                                      onClick={() => setMigrationStep(1)}
+                                      className="text-purple-600 font-bold hover:text-purple-800 text-sm"
+                                   >
+                                       Start Over
+                                   </button>
                               </div>
                           </div>
-
-                          <div className="bg-amber-50 p-4 rounded-lg flex gap-3 text-amber-800 text-xs mb-6 border border-amber-100">
-                              <AlertTriangle size={24} className="shrink-0" />
-                              <p>Warning: This modifies the database directly. Ensure you have a backup (Step 2) before proceeding.</p>
-                          </div>
-
-                          {replaceResult ? (
-                              <div className="bg-green-50 p-6 rounded-xl border border-green-200 text-center">
-                                  <CheckCircle size={32} className="text-green-600 mx-auto mb-2" />
-                                  <div className="font-bold text-green-900">Replacement Complete!</div>
-                                  <div className="text-sm text-green-700 mt-1">
-                                      Modified {replaceResult.rows_affected} rows.
-                                  </div>
-                              </div>
-                          ) : (
-                              <button
-                                onClick={handleReplace}
-                                disabled={replacing}
-                                className="w-full bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2"
-                              >
-                                  {replacing ? <Loader className="animate-spin" /> : <RotateCcw size={18} />}
-                                  {replacing ? 'Processing Database...' : 'Run URL Replacement'}
-                              </button>
-                          )}
                       </div>
                   </div>
               )}
           </div>
       ) : (
-          /* BACKUPS TAB (Placeholder / Existing) */
+          /* BACKUPS TAB (Placeholder) */
           <div className="space-y-6">
-             {/* ... existing backup UI ... */}
              <div className="bg-white p-12 text-center rounded-xl border border-gray-200">
                  <Cloud size={48} className="text-gray-300 mx-auto mb-4" />
                  <h3 className="text-lg font-medium text-gray-700">Daily Cloud Backups</h3>
