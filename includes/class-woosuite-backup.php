@@ -625,7 +625,7 @@ class WooSuite_Backup {
             $batch[] = array(
                 'source_id' => $row['ID'],
                 'type' => 'post',
-                'content' => substr( $row['post_content'], 0, 5000 ) // Truncate for AI token limits
+                'content' => substr( $row['post_content'], 0, 2000 ) // Truncate to 2000 chars to prevent Memory Exhaustion
             );
         }
 

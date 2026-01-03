@@ -1341,13 +1341,22 @@ class WooSuite_Api {
             $analysis = $groq->analyze_deep_links( $content_batch, $old_domain );
 
             if ( is_wp_error( $analysis ) ) {
+                error_log( 'WooSuite Migration Scan API Error: ' . $analysis->get_error_message() );
                 return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+            }
+
+            // Strict Type Check - AI must return an array
+            if ( ! is_array( $analysis ) ) {
+                error_log( 'WooSuite Migration Scan Critical: Invalid AI Response Type: ' . gettype( $analysis ) );
+                // If it's null, it usually means json_decode failed silently or returned nothing.
+                return new WP_REST_Response( array( 'success' => false, 'message' => 'AI returned invalid data format. Please try again.' ), 500 );
             }
 
             return new WP_REST_Response( array( 'success' => true, 'issues' => $analysis, 'has_more' => count($content_batch) >= $limit ), 200 );
         } catch ( Exception $e ) {
-            // Prevent white screen of death
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'Migration Scan Error: ' . $e->getMessage() ), 500 );
+            // Prevent white screen of death and log the actual error
+            error_log( 'WooSuite Migration Scan Crash: ' . $e->getMessage() . "\n" . $e->getTraceAsString() );
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Critical Error: ' . $e->getMessage() ), 500 );
         }
     }
 
