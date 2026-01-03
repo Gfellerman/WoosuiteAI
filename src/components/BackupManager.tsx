@@ -351,7 +351,12 @@ const BackupManager: React.FC = () => {
 
                               <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800 border border-blue-100 mb-4">
                                   <strong>Files (Images/Uploads):</strong>
-                                  <br/>Since files are too large (40GB+), you must move `wp-content/uploads` manually via FTP.
+                                  <br/>
+                                  {analysisReport?.uploads_size_mb > 0
+                                     ? `Estimated Size: ${analysisReport.uploads_size_mb} MB.`
+                                     : `Estimated Size: Unknown.`}
+                                  <br/>
+                                  You must move `wp-content/uploads` manually via FTP.
                               </div>
 
                               <div className="text-xs text-gray-400">

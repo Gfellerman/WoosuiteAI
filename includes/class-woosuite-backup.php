@@ -36,11 +36,15 @@ class WooSuite_Backup {
         // Get DB Size
         $db_size_mb = $this->get_db_size_mb();
 
+        // Get Uploads Size
+        $uploads_size_mb = $this->get_uploads_size_mb();
+
         return array(
             'php_version' => phpversion(),
             'wp_version' => $wp_version,
             'server_software' => $_SERVER['SERVER_SOFTWARE'],
             'db_size_mb' => $db_size_mb,
+            'uploads_size_mb' => $uploads_size_mb,
             'memory_limit' => ini_get( 'memory_limit' ),
             'max_execution_time' => ini_get( 'max_execution_time' ),
             'active_plugins' => $plugin_list,
@@ -58,6 +62,43 @@ class WooSuite_Backup {
             $db_size += $row->Data_length + $row->Index_length;
         }
         return round( $db_size / 1024 / 1024, 2 );
+    }
+
+    private function get_uploads_size_mb() {
+        $upload_dir = wp_upload_dir();
+        $path = $upload_dir['basedir'];
+
+        if ( ! file_exists( $path ) ) return 0;
+
+        // Method 1: DU (Fastest)
+        if ( $this->command_exists( 'du' ) ) {
+            // -s summary, -m megabytes
+            $output = shell_exec( 'du -sm ' . escapeshellarg( $path ) );
+            $size = intval( trim( preg_replace( '/\s+.*$/', '', $output ) ) );
+            if ( $size > 0 ) return $size;
+        }
+
+        // Method 2: Recursive Iterator (Fallback)
+        // Set a time limit to avoid hanging on massive directories
+        $size = 0;
+        $start_time = time();
+        $timeout = 3; // 3 seconds max for calculation
+
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator( $path, RecursiveDirectoryIterator::SKIP_DOTS )
+            );
+
+            foreach ( $iterator as $file ) {
+                if ( time() - $start_time > $timeout ) {
+                    return -1; // Indicate timed out / unknown
+                }
+                $size += $file->getSize();
+            }
+            return round( $size / 1024 / 1024, 2 );
+        } catch ( Exception $e ) {
+            return -1; // Error
+        }
     }
 
     public function get_tables() {
