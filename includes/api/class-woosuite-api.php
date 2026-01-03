@@ -1345,14 +1345,17 @@ class WooSuite_Api {
                 return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
             }
 
+            // Normalize: Extract issues from wrapper if present (JSON Object mode returns { issues: [...] })
+            $issues = isset( $analysis['issues'] ) ? $analysis['issues'] : $analysis;
+
             // Strict Type Check - AI must return an array
-            if ( ! is_array( $analysis ) ) {
-                error_log( 'WooSuite Migration Scan Critical: Invalid AI Response Type: ' . gettype( $analysis ) );
+            if ( ! is_array( $issues ) ) {
+                error_log( 'WooSuite Migration Scan Critical: Invalid AI Response Type: ' . gettype( $issues ) . ' (Raw: ' . print_r($analysis, true) . ')' );
                 // If it's null, it usually means json_decode failed silently or returned nothing.
                 return new WP_REST_Response( array( 'success' => false, 'message' => 'AI returned invalid data format. Please try again.' ), 500 );
             }
 
-            return new WP_REST_Response( array( 'success' => true, 'issues' => $analysis, 'has_more' => count($content_batch) >= $limit ), 200 );
+            return new WP_REST_Response( array( 'success' => true, 'issues' => $issues, 'has_more' => count($content_batch) >= $limit ), 200 );
         } catch ( Exception $e ) {
             // Prevent white screen of death and log the actual error
             error_log( 'WooSuite Migration Scan Crash: ' . $e->getMessage() . "\n" . $e->getTraceAsString() );
