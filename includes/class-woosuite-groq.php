@@ -374,6 +374,60 @@ class WooSuite_Groq {
         return $this->call_api( $body, true );
     }
 
+    public function analyze_deep_links( $content_batch, $old_domain ) {
+        if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
+            return new WP_Error( 'missing_key', 'Groq API Key is missing.' );
+        }
+
+        $json_batch = json_encode( $content_batch );
+
+        $prompt = "
+            You are a WordPress Database Expert specializing in migration.
+
+            Task: Detect broken or absolute links to the OLD DOMAIN: '$old_domain' inside the following content batch.
+
+            Context: The user is migrating to a new domain. Standard search/replace might miss links inside JSON blobs, serialized arrays, or complex HTML attributes.
+
+            Content Batch (JSON):
+            $json_batch
+
+            Instructions:
+            1. Scan the content for any occurrence of '$old_domain'.
+            2. If found, identify the exact 'original_string' (the full URL or the substring needing replacement).
+            3. Propose a 'suggested_fix' (replace with relative URL or placeholder '{{NEW_DOMAIN}}').
+            4. If the link is inside a serialized string (s:5:\"...\"), flag it as 'serialized'.
+            5. If no issues found in an item, omit it.
+
+            Output strictly JSON array of objects:
+            [
+                {
+                    \"source_id\": 123,
+                    \"location\": \"post_content\",
+                    \"original_string\": \"http://old-domain.com/image.jpg\",
+                    \"suggested_fix\": \"/wp-content/uploads/image.jpg\",
+                    \"confidence\": \"High\"
+                }
+            ]
+        ";
+
+        $body = array(
+            'model' => $this->get_model( self::MODEL_MAIN ),
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => 'You are a database migration expert. Output strictly JSON.'
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'response_format' => array( 'type' => 'json_object' )
+        );
+
+        return $this->call_api( $body, true );
+    }
+
     public function generate_image_seo( $url, $filename, $product_context = null ) {
         if ( empty( $this->api_key ) && strpos( $this->api_url, 'groq.com' ) !== false ) {
             return new WP_Error( 'missing_key', 'Groq API Key is missing.' );

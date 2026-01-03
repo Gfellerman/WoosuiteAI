@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cloud, HardDrive, Download, RotateCcw, CheckCircle, ArrowRightLeft, Shield, Server, Database, AlertTriangle, Loader, Check, Sparkles, AlertOctagon } from 'lucide-react';
+import DeepLinkScanner from './Migration/DeepLinkScanner';
 
 const BackupManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'backups' | 'migration'>('backups');
@@ -464,6 +465,7 @@ const BackupManager: React.FC = () => {
 
               {/* Step 3: Instructions (Formerly URL Swap) */}
               {migrationStep === 3 && (
+                  <React.Fragment>
                   <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-right-4">
                       <div className="max-w-2xl mx-auto">
                           <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -498,6 +500,10 @@ const BackupManager: React.FC = () => {
                           </div>
                       </div>
                   </div>
+
+                  {/* Step 4: AI Deep Scan (Optional) */}
+                  <DeepLinkScanner oldDomain={oldDomain} newDomain={newDomain} />
+              </React.Fragment>
               )}
           </div>
       ) : (
