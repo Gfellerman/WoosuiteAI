@@ -150,17 +150,18 @@ class WooSuite_Groq {
         }
 
         $prompt = "
-            You are a Senior WordPress DevOps Engineer. Analyze this System Report for a site migration (40GB data).
+            You are a Senior WordPress DevOps Engineer. Analyze this System Report for a site migration.
             $domain_context
 
             System Report:
             $report_json
 
             Task:
-            1. Identify potential risks (e.g., Low PHP memory, specific plugins like Caching/Security that might break migration).
-            2. If domains are provided, suggest specific settings or hardcoded paths to watch out for.
-            3. Assign a 'Risk Level' (Low, Medium, High).
-            4. Provide 3 specific recommendations for the user before they export the database.
+            1. Analyze the 'db_size_mb' vs 'memory_limit'. Only recommend increasing PHP memory if the limit is too low for the database size.
+            2. Identify specific plugins (Caching/Security) that might interfere with migration.
+            3. If domains are provided, warn about hardcoded paths or serialized data issues (though the tool handles serialization).
+            4. Assign a 'Risk Level' (Low, Medium, High).
+            5. Provide 3 specific recommendations.
 
             Output strictly JSON:
             {
