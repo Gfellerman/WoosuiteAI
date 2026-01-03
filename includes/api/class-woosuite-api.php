@@ -1326,24 +1326,29 @@ class WooSuite_Api {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'Missing old_domain.' ), 400 );
         }
 
-        if ( ! class_exists( 'WooSuite_Backup' ) ) {
-            require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+        try {
+            if ( ! class_exists( 'WooSuite_Backup' ) ) {
+                require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-woosuite-backup.php';
+            }
+            $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
+            $content_batch = $backup->scan_for_links( $old_domain, $offset, $limit );
+
+            if ( empty( $content_batch ) ) {
+                return new WP_REST_Response( array( 'success' => true, 'issues' => array(), 'has_more' => false ), 200 );
+            }
+
+            $groq = new WooSuite_Groq();
+            $analysis = $groq->analyze_deep_links( $content_batch, $old_domain );
+
+            if ( is_wp_error( $analysis ) ) {
+                return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
+            }
+
+            return new WP_REST_Response( array( 'success' => true, 'issues' => $analysis, 'has_more' => count($content_batch) >= $limit ), 200 );
+        } catch ( Exception $e ) {
+            // Prevent white screen of death
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Migration Scan Error: ' . $e->getMessage() ), 500 );
         }
-        $backup = new WooSuite_Backup( $this->plugin_name, $this->version );
-        $content_batch = $backup->scan_for_links( $old_domain, $offset, $limit );
-
-        if ( empty( $content_batch ) ) {
-            return new WP_REST_Response( array( 'success' => true, 'issues' => array(), 'has_more' => false ), 200 );
-        }
-
-        $groq = new WooSuite_Groq();
-        $analysis = $groq->analyze_deep_links( $content_batch, $old_domain );
-
-        if ( is_wp_error( $analysis ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => $analysis->get_error_message() ), 500 );
-        }
-
-        return new WP_REST_Response( array( 'success' => true, 'issues' => $analysis, 'has_more' => count($content_batch) >= $limit ), 200 );
     }
 
     public function migration_fix( $request ) {
