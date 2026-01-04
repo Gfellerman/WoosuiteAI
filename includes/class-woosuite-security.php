@@ -78,6 +78,27 @@ class WooSuite_Security {
         $block_sqli = get_option( 'woosuite_firewall_block_sqli', 'yes' ) === 'yes';
         $block_xss = get_option( 'woosuite_firewall_block_xss', 'yes' ) === 'yes';
 
+        // Helper function to recursively check arrays (prevents bypass)
+        $check_value = function( $value, $patterns ) use ( &$check_value ) {
+            if ( is_array( $value ) ) {
+                // Recursively check array values (prevents array bypass)
+                foreach ( $value as $item ) {
+                    if ( $check_value( $item, $patterns ) ) {
+                        return true; // Found threat, stop checking
+                    }
+                }
+                return false;
+            }
+
+            $value_lower = strtolower( urldecode( $value ) );
+            foreach ( $patterns as $pattern ) {
+                if ( strpos( $value_lower, $pattern ) !== false ) {
+                    return true; // Threat found
+                }
+            }
+            return false;
+        };
+
         // 1. Check for basic SQL Injection patterns
         if ( $block_sqli ) {
             $sqli_patterns = array(
@@ -89,15 +110,11 @@ class WooSuite_Security {
             );
 
             foreach ( $request_data as $key => $value ) {
-                if ( is_array( $value ) ) continue; // Skip arrays for now
-                $value_lower = strtolower( urldecode( $value ) );
-                foreach ( $sqli_patterns as $pattern ) {
-                    if ( strpos( $value_lower, $pattern ) !== false ) {
-                        // Increase violation count
-                        $this->track_violation( $ip );
-                        $this->block_request( 'SQL Injection Attempt', 'high', $simulation_mode );
-                        if ( $simulation_mode ) break; // Log once per request in sim mode
-                    }
+                if ( $check_value( $value, $sqli_patterns ) ) {
+                    // Increase violation count
+                    $this->track_violation( $ip );
+                    $this->block_request( 'SQL Injection Attempt', 'high', $simulation_mode );
+                    if ( $simulation_mode ) break; // Log once per request in sim mode
                 }
             }
         }
@@ -112,14 +129,10 @@ class WooSuite_Security {
             );
 
             foreach ( $request_data as $key => $value ) {
-                if ( is_array( $value ) ) continue;
-                $value_lower = strtolower( urldecode( $value ) );
-                foreach ( $xss_patterns as $pattern ) {
-                    if ( strpos( $value_lower, $pattern ) !== false ) {
-                        $this->track_violation( $ip );
-                        $this->block_request( 'XSS Attempt', 'medium', $simulation_mode );
-                        if ( $simulation_mode ) break;
-                    }
+                if ( $check_value( $value, $xss_patterns ) ) {
+                    $this->track_violation( $ip );
+                    $this->block_request( 'XSS Attempt', 'medium', $simulation_mode );
+                    if ( $simulation_mode ) break;
                 }
             }
         }

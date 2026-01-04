@@ -43,6 +43,12 @@ class WooSuite_Security_Quarantine {
      * Restore a file from quarantine
      */
     public function restore_file( $quarantined_filename ) {
+        // SECURITY: Sanitize filename to prevent path traversal
+        $quarantined_filename = basename( $quarantined_filename );
+        if ( strpos( $quarantined_filename, '..' ) !== false || strpos( $quarantined_filename, '/' ) !== false ) {
+            return new WP_Error( 'invalid_filename', 'Invalid filename detected.' );
+        }
+
         $source = $this->quarantine_dir . $quarantined_filename;
 
         if ( ! file_exists( $source ) ) {
@@ -52,20 +58,36 @@ class WooSuite_Security_Quarantine {
         // Decode original path
         // format: path_encoded.quarantined
         $original_path_encoded = str_replace( '.quarantined', '', $quarantined_filename );
-        $original_path = base64_decode( $original_path_encoded );
+        $original_path = base64_decode( $original_path_encoded, true ); // Use strict mode
 
         if ( ! $original_path ) {
             return new WP_Error( 'invalid_filename', 'Could not decode original path.' );
         }
 
+        // SECURITY: Validate decoded path is within ABSPATH (prevent path traversal)
+        $real_original_path = realpath( $original_path );
+        if ( ! $real_original_path ) {
+            // Path doesn't exist, but we still need to validate it's within ABSPATH
+            $real_original_path = realpath( dirname( $original_path ) );
+            if ( ! $real_original_path || strpos( $real_original_path, realpath( ABSPATH ) ) !== 0 ) {
+                return new WP_Error( 'invalid_path', 'Decoded path is outside WordPress root.' );
+            }
+            // Reconstruct path
+            $real_original_path = $real_original_path . '/' . basename( $original_path );
+        }
+
+        // Final validation: ensure restored path is within ABSPATH
+        if ( strpos( $real_original_path, realpath( ABSPATH ) ) !== 0 ) {
+            return new WP_Error( 'invalid_path', 'Cannot restore file outside WordPress root.' );
+        }
+
         // Ensure directory exists (if plugin was deleted, we might need to recreate folder?)
-        // Ideally we just try to move it back.
-        $dir = dirname( $original_path );
+        $dir = dirname( $real_original_path );
         if ( ! file_exists( $dir ) ) {
             wp_mkdir_p( $dir );
         }
 
-        if ( rename( $source, $original_path ) ) {
+        if ( rename( $source, $real_original_path ) ) {
             return true;
         }
 

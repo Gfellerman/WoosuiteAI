@@ -1087,8 +1087,21 @@ class WooSuite_Api {
 
     public function move_to_quarantine( $request ) {
         $params = $request->get_json_params();
-        $file = isset( $params['file'] ) ? $params['file'] : '';
+        $file = isset( $params['file'] ) ? sanitize_text_field( $params['file'] ) : '';
         if ( empty( $file ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No file specified' ), 400 );
+
+        // SECURITY: Normalize and validate path
+        $file = wp_normalize_path( $file );
+        
+        // Prevent path traversal
+        if ( strpos( $file, '..' ) !== false || strpos( $file, '/' ) === 0 ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid path: cannot use absolute paths or path traversal' ), 400 );
+        }
+
+        // Convert to absolute path if relative
+        if ( strpos( $file, ABSPATH ) !== 0 ) {
+            $file = ABSPATH . $file;
+        }
 
         $quarantine = new WooSuite_Security_Quarantine();
         $result = $quarantine->quarantine_file( $file );
@@ -1102,8 +1115,14 @@ class WooSuite_Api {
 
     public function restore_from_quarantine( $request ) {
         $params = $request->get_json_params();
-        $id = isset( $params['id'] ) ? $params['id'] : '';
+        $id = isset( $params['id'] ) ? sanitize_text_field( $params['id'] ) : '';
         if ( empty( $id ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No ID specified' ), 400 );
+
+        // SECURITY: Sanitize filename to prevent path traversal
+        $id = basename( $id );
+        if ( strpos( $id, '..' ) !== false || strpos( $id, '/' ) !== false ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid filename' ), 400 );
+        }
 
         $quarantine = new WooSuite_Security_Quarantine();
         $result = $quarantine->restore_file( $id );
@@ -1117,8 +1136,14 @@ class WooSuite_Api {
 
     public function delete_from_quarantine( $request ) {
         $params = $request->get_json_params();
-        $id = isset( $params['id'] ) ? $params['id'] : '';
+        $id = isset( $params['id'] ) ? sanitize_text_field( $params['id'] ) : '';
         if ( empty( $id ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'No ID specified' ), 400 );
+
+        // SECURITY: Sanitize filename to prevent path traversal
+        $id = basename( $id );
+        if ( strpos( $id, '..' ) !== false || strpos( $id, '/' ) !== false ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid filename' ), 400 );
+        }
 
         $quarantine = new WooSuite_Security_Quarantine();
         $result = $quarantine->delete_file( $id );
@@ -1137,10 +1162,25 @@ class WooSuite_Api {
 
     public function add_ignored_path( $request ) {
         $params = $request->get_json_params();
-        $path = isset( $params['path'] ) ? $params['path'] : '';
-        if ( empty( $path ) ) return new WP_REST_Response( array( 'success' => false ), 400 );
+        $path = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
+        if ( empty( $path ) ) return new WP_REST_Response( array( 'success' => false, 'message' => 'Path is required' ), 400 );
 
         // Normalize slashes
+        $path = wp_normalize_path( $path );
+
+        // SECURITY: Validate path is within ABSPATH and prevent traversal
+        if ( strpos( $path, '..' ) !== false || strpos( $path, '/' ) === 0 ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid path: cannot use absolute paths or path traversal' ), 400 );
+        }
+
+        // Resolve to absolute path and verify it's within ABSPATH
+        $full_path = realpath( ABSPATH . $path );
+        if ( ! $full_path || strpos( $full_path, realpath( ABSPATH ) ) !== 0 ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid path: must be within WordPress root' ), 400 );
+        }
+
+        // Convert back to relative path for storage
+        $path = str_replace( ABSPATH, '', $full_path );
         $path = wp_normalize_path( $path );
 
         $ignored = get_option( 'woosuite_security_ignored_paths', array() );
@@ -1165,7 +1205,25 @@ class WooSuite_Api {
         if ( $action === 'ignore' ) {
              $ignored = get_option( 'woosuite_security_ignored_paths', array() );
              foreach ( $items as $path ) {
+                 // Sanitize and validate path
+                 $path = sanitize_text_field( $path );
                  $path = wp_normalize_path( $path );
+
+                 // SECURITY: Validate path is within ABSPATH and prevent traversal
+                 if ( strpos( $path, '..' ) !== false || strpos( $path, '/' ) === 0 ) {
+                     continue; // Skip invalid paths
+                 }
+
+                 // Resolve to absolute path and verify it's within ABSPATH
+                 $full_path = realpath( ABSPATH . $path );
+                 if ( ! $full_path || strpos( $full_path, realpath( ABSPATH ) ) !== 0 ) {
+                     continue; // Skip paths outside WordPress root
+                 }
+
+                 // Convert back to relative path
+                 $path = str_replace( ABSPATH, '', $full_path );
+                 $path = wp_normalize_path( $path );
+
                  if ( ! in_array( $path, $ignored ) ) {
                      $ignored[] = $path;
                      $count++;
@@ -1177,9 +1235,29 @@ class WooSuite_Api {
         } elseif ( $action === 'delete' ) {
              // CAUTION: This deletes files!
              foreach ( $items as $path ) {
-                 $full_path = ABSPATH . $path; // Path is relative
-                 if ( file_exists( $full_path ) ) {
-                     // Check if safe
+                 // Sanitize path
+                 $path = sanitize_text_field( $path );
+                 $path = wp_normalize_path( $path );
+
+                 // SECURITY: Prevent path traversal attacks
+                 if ( strpos( $path, '..' ) !== false || strpos( $path, '/' ) === 0 ) {
+                     continue; // Skip invalid paths
+                 }
+
+                 // Resolve to absolute path and verify it's within ABSPATH
+                 $full_path = realpath( ABSPATH . $path );
+                 if ( ! $full_path || strpos( $full_path, realpath( ABSPATH ) ) !== 0 ) {
+                     continue; // Skip paths outside WordPress root
+                 }
+
+                 // Additional safety: prevent deletion of critical WordPress files
+                 $critical_files = array( 'wp-config.php', 'index.php', '.htaccess' );
+                 $basename = basename( $full_path );
+                 if ( in_array( $basename, $critical_files ) && strpos( $full_path, ABSPATH ) === 0 ) {
+                     continue; // Skip critical files
+                 }
+
+                 if ( file_exists( $full_path ) && is_file( $full_path ) ) {
                      if ( unlink( $full_path ) ) {
                          $count++;
                      }
@@ -1438,15 +1516,25 @@ class WooSuite_Api {
             return new WP_REST_Response( array( 'success' => false, 'message' => 'No file specified.' ), 400 );
         }
 
-        // Convert relative path to absolute
-        if ( strpos( $filepath, ABSPATH ) === false ) {
-            $real_filepath = ABSPATH . $filepath;
-        } else {
-            $real_filepath = $filepath;
+        // SECURITY: Normalize and validate path to prevent traversal attacks
+        $filepath = wp_normalize_path( $filepath );
+        
+        // Prevent path traversal
+        if ( strpos( $filepath, '..' ) !== false || strpos( $filepath, '/' ) === 0 ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Invalid path: cannot use absolute paths or path traversal' ), 400 );
         }
 
-        if ( ! file_exists( $real_filepath ) ) {
-            return new WP_REST_Response( array( 'success' => false, 'message' => 'File not found.' ), 404 );
+        // Convert relative path to absolute and validate
+        $real_filepath = realpath( ABSPATH . $filepath );
+        
+        // SECURITY: Ensure file is within ABSPATH
+        if ( ! $real_filepath || strpos( $real_filepath, realpath( ABSPATH ) ) !== 0 ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'File path is outside WordPress root.' ), 403 );
+        }
+
+        // Additional security: ensure it's a file, not a directory
+        if ( ! is_file( $real_filepath ) ) {
+            return new WP_REST_Response( array( 'success' => false, 'message' => 'Path is not a file.' ), 400 );
         }
 
         // Limit file reading to prevent memory issues (Read first 5KB)

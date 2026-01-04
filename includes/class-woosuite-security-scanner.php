@@ -103,23 +103,45 @@ class WooSuite_Security_Scanner {
      * Check if a folder/plugin is in the safe list
      */
     private function is_safe_folder( $path ) {
-        $slug = basename( $path );
+        // Normalize and resolve path to prevent traversal attacks
+        $real_path = realpath( $path );
+        if ( ! $real_path ) {
+            return false; // Invalid path
+        }
+
+        // Ensure path is within ABSPATH (prevent directory traversal)
+        if ( strpos( $real_path, realpath( ABSPATH ) ) !== 0 ) {
+            return false; // Path outside WordPress root
+        }
+
+        $slug = basename( $real_path );
         // Check hardcoded safe list
         if ( in_array( $slug, $this->safe_slugs ) ) {
             return true;
         }
 
-        // Check user ignore list (paths)
+        // Check user ignore list (paths) - validate and normalize
         $ignored_paths = get_option( 'woosuite_security_ignored_paths', array() );
-        $rel_path = str_replace( ABSPATH, '', $path );
+        $rel_path = str_replace( ABSPATH, '', $real_path );
+        $rel_path = wp_normalize_path( $rel_path );
 
-        // Check if the path starts with any ignored path
+        // Check if the path starts with any ignored path (exact prefix match)
         foreach ( $ignored_paths as $ignored ) {
-            if ( strpos( $rel_path, $ignored ) === 0 ) {
-                return true;
+            // Normalize ignored path
+            $ignored_normalized = wp_normalize_path( $ignored );
+            
+            // Prevent path traversal bypasses - ensure ignored path is within ABSPATH
+            if ( strpos( $ignored_normalized, '..' ) !== false || strpos( $ignored_normalized, '/' ) === 0 ) {
+                continue; // Skip invalid ignored paths
             }
-            if ( strpos( $path, $ignored ) !== false ) { // Absolute path check just in case
-                return true;
+
+            // Exact prefix match only (prevents bypasses like "wp-content/../")
+            if ( strpos( $rel_path, $ignored_normalized ) === 0 ) {
+                // Additional check: ensure it's a directory boundary or exact match
+                $next_char = substr( $rel_path, strlen( $ignored_normalized ), 1 );
+                if ( $next_char === '' || $next_char === '/' ) {
+                    return true;
+                }
             }
         }
 
