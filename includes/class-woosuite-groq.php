@@ -398,22 +398,18 @@ class WooSuite_Groq {
             4. If the link is inside a serialized string (s:5:\"...\"), flag it as 'serialized'.
             5. If no issues found in an item, omit it.
 
-            CRITICAL OUTPUT RULES:
-            - You MUST return ONLY a valid JSON Array.
-            - Do NOT wrap in Markdown code blocks.
-            - Do NOT add conversational text.
-            - Start with '[' and end with ']'.
-
-            Example Output:
-            [
-                {
-                    \"source_id\": 123,
-                    \"location\": \"post_content\",
-                    \"original_string\": \"http://old-domain.com/image.jpg\",
-                    \"suggested_fix\": \"/wp-content/uploads/image.jpg\",
-                    \"confidence\": \"High\"
-                }
-            ]
+            Output strictly JSON object:
+            {
+                \"issues\": [
+                    {
+                        \"source_id\": 123,
+                        \"location\": \"post_content\",
+                        \"original_string\": \"http://old-domain.com/image.jpg\",
+                        \"suggested_fix\": \"/wp-content/uploads/image.jpg\",
+                        \"confidence\": \"High\"
+                    }
+                ]
+            }
         ";
 
         $body = array(
@@ -421,14 +417,14 @@ class WooSuite_Groq {
             'messages' => array(
                 array(
                     'role' => 'system',
-                    'content' => 'You are a database migration expert. Output strictly JSON array.'
+                    'content' => 'You are a database migration expert. Output strictly JSON.'
                 ),
                 array(
                     'role' => 'user',
                     'content' => $prompt
                 )
             ),
-            // 'response_format' => array( 'type' => 'json_object' ) // Disabled to prevent 400 errors with Lists
+            'response_format' => array( 'type' => 'json_object' )
         );
 
         return $this->call_api( $body, true );
